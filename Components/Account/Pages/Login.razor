@@ -1,4 +1,4 @@
-﻿@page "/Account/Login"
+@page "/Account/Login"
 
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Authentication
@@ -11,65 +11,97 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Log in</PageTitle>
+<PageTitle>Iniciar Sesión</PageTitle>
 
-<h1>Log in</h1>
-<div class="row">
-    <div class="col-lg-6">
-        <section>
-            <StatusMessage Message="@errorMessage" />
-            <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">
-                <DataAnnotationsValidator />
-                <h2>Use a local account to log in.</h2>
-                <hr />
-                <ValidationSummary class="text-danger" role="alert" />
-                <div class="form-floating mb-3">
-                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username webauthn" aria-required="true" placeholder="name@example.com" />
-                    <label for="Input.Email" class="form-label">Email</label>
-                    <ValidationMessage For="() => Input.Email" class="text-danger" />
-                </div>
-                <div class="form-floating mb-3">
-                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password" />
-                    <label for="Input.Password" class="form-label">Password</label>
-                    <ValidationMessage For="() => Input.Password" class="text-danger" />
-                </div>
-                <div class="checkbox mb-3">
-                    <label class="form-label">
-                        <InputCheckbox @bind-Value="Input.RememberMe" class="darker-border-checkbox form-check-input" />
-                        Remember me
-                    </label>
-                </div>
-                <div>
-                    <button type="submit" class="w-100 btn btn-lg btn-primary">Log in</button>
-                </div>
-                <hr />
-                <div class="d-flex flex-column">
-                    <span class="text-secondary mx-auto mt-2">OR</span>
-                    <PasskeySubmit Operation="PasskeyOperation.Request" Name="Input.Passkey" EmailName="Input.Email" class="btn btn-link mx-auto">Log in with a passkey</PasskeySubmit>
-                </div>
-                <hr />
-                <div>
-                    <p>
-                        <a href="Account/ForgotPassword">Forgot your password?</a>
-                    </p>
-                    <p>
-                        <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">Register as a new user</a>
-                    </p>
-                    <p>
-                        <a href="Account/ResendEmailConfirmation">Resend email confirmation</a>
-                    </p>
-                </div>
-            </EditForm>
-        </section>
-    </div>
-    <div class="col-lg-4 col-lg-offset-2">
-        <section>
-            <h3>Use another service to log in.</h3>
-            <hr />
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    <MudPaper Elevation="4" Class="pa-8">
+        <div class="d-flex flex-column align-center mb-4">
+            <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Large" Color="Color.Primary" />
+            <MudText Typo="Typo.h4" Class="mt-2">Iniciar Sesión</MudText>
+            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">
+                Ingresa con tu cuenta local
+            </MudText>
+        </div>
+
+        <StatusMessage Message="@errorMessage" />
+
+        <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="Input.Email"
+                          Label="Correo electrónico"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Required="true"
+                          RequiredError="El correo es obligatorio"
+                          Class="mb-4"
+                          AutoComplete="username webauthn"
+                          Placeholder="correo@ejemplo.com" />
+
+            <MudTextField @bind-Value="Input.Password"
+                          Label="Contraseña"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Required="true"
+                          RequiredError="La contraseña es obligatoria"
+                          Class="mb-4"
+                          AutoComplete="current-password"
+                          Placeholder="Contraseña" />
+
+            <MudCheckBox @bind-Value="Input.RememberMe"
+                         Label="Recordarme"
+                         Color="Color.Primary"
+                         Class="mb-4" />
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       Class="mb-4">
+                Iniciar Sesión
+            </MudButton>
+
+            <MudDivider Class="my-4">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">O</MudText>
+            </MudDivider>
+
+            <div class="d-flex justify-center mb-4">
+                <PasskeySubmit Operation="PasskeyOperation.Request"
+                              Name="Input.Passkey"
+                              EmailName="Input.Email"
+                              class="mud-button-root mud-button mud-button-text mud-button-text-default mud-button-text-size-medium mud-ripple">
+                    Iniciar con passkey
+                </PasskeySubmit>
+            </div>
+
+            <MudDivider Class="my-4" />
+
+            <div class="d-flex flex-column align-center">
+                <MudLink Href="Account/ForgotPassword" Typo="Typo.body2">
+                    ¿Olvidaste tu contraseña?
+                </MudLink>
+                <MudLink Href="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))"
+                         Typo="Typo.body2"
+                         Class="mt-2">
+                    ¿No tienes cuenta? Regístrate
+                </MudLink>
+                <MudLink Href="Account/ResendEmailConfirmation" Typo="Typo.body2" Class="mt-2">
+                    Reenviar confirmación de correo
+                </MudLink>
+            </div>
+        </EditForm>
+
+        <MudDivider Class="my-4" />
+
+        <div>
+            <MudText Typo="Typo.h6" Align="Align.Center" Class="mb-2">
+                Iniciar sesión con otro servicio
+            </MudText>
             <ExternalLoginPicker />
-        </section>
-    </div>
-</div>
+        </div>
+    </MudPaper>
+</MudContainer>
 
 @code {
     private string? errorMessage;
@@ -142,21 +174,21 @@
         }
         else
         {
-            errorMessage = "Error: Invalid login attempt.";
+            errorMessage = "Error: Intento de inicio de sesión inválido.";
         }
     }
 
     private sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
+        [Required(ErrorMessage = "El correo electrónico es obligatorio")]
+        [EmailAddress(ErrorMessage = "El correo electrónico no es válido")]
         public string Email { get; set; } = "";
 
-        [Required]
+        [Required(ErrorMessage = "La contraseña es obligatoria")]
         [DataType(DataType.Password)]
         public string Password { get; set; } = "";
 
-        [Display(Name = "Remember me?")]
+        [Display(Name = "Recordarme")]
         public bool RememberMe { get; set; }
 
         public PasskeyInputModel? Passkey { get; set; }
