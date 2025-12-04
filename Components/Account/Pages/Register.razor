@@ -1,4 +1,4 @@
-﻿@page "/Account/Register"
+@page "/Account/Register"
 
 @using System.ComponentModel.DataAnnotations
 @using System.Text
@@ -15,44 +15,82 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Register</PageTitle>
+<PageTitle>Crear Cuenta</PageTitle>
 
-<h1>Register</h1>
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    <MudPaper Elevation="4" Class="pa-8">
+        <div class="d-flex flex-column align-center mb-4">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Large" Color="Color.Primary" />
+            <MudText Typo="Typo.h4" Class="mt-2">Crear Cuenta</MudText>
+            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">
+                Regístrate para comenzar
+            </MudText>
+        </div>
 
-<div class="row">
-    <div class="col-lg-6">
         <StatusMessage Message="@Message" />
+
         <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
             <DataAnnotationsValidator />
-            <h2>Create a new account.</h2>
-            <hr />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
-                <label for="Input.Email">Email</label>
-                <ValidationMessage For="() => Input.Email" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
-                <label for="Input.Password">Password</label>
-                <ValidationMessage For="() => Input.Password" class="text-danger" />
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password" />
-                <label for="Input.ConfirmPassword">Confirm Password</label>
-                <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Register</button>
+
+            <MudTextField @bind-Value="Input.Email"
+                          Label="Correo electrónico"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Required="true"
+                          RequiredError="El correo es obligatorio"
+                          Class="mb-4"
+                          AutoComplete="username"
+                          Placeholder="correo@ejemplo.com" />
+
+            <MudTextField @bind-Value="Input.Password"
+                          Label="Contraseña"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Required="true"
+                          RequiredError="La contraseña es obligatoria"
+                          HelperText="Mínimo 6 caracteres"
+                          Class="mb-4"
+                          AutoComplete="new-password"
+                          Placeholder="Contraseña" />
+
+            <MudTextField @bind-Value="Input.ConfirmPassword"
+                          Label="Confirmar contraseña"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Required="true"
+                          RequiredError="Debes confirmar la contraseña"
+                          Class="mb-4"
+                          AutoComplete="new-password"
+                          Placeholder="Confirmar contraseña" />
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       Class="mb-4">
+                Registrarse
+            </MudButton>
         </EditForm>
-    </div>
-    <div class="col-lg-4 col-lg-offset-2">
-        <section>
-            <h3>Use another service to register.</h3>
-            <hr />
+
+        <MudDivider Class="my-4" />
+
+        <div class="d-flex justify-center">
+            <MudLink Href="Account/Login" Typo="Typo.body2">
+                ¿Ya tienes cuenta? Inicia sesión
+            </MudLink>
+        </div>
+
+        <MudDivider Class="my-4" />
+
+        <div>
+            <MudText Typo="Typo.h6" Align="Align.Center" Class="mb-2">
+                Registrarse con otro servicio
+            </MudText>
             <ExternalLoginPicker />
-        </section>
-    </div>
-</div>
+        </div>
+    </MudPaper>
+</MudContainer>
 
 @code {
     private IEnumerable<IdentityError>? identityErrors;
@@ -133,20 +171,20 @@
 
     private sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
-        [Display(Name = "Email")]
+        [Required(ErrorMessage = "El correo electrónico es obligatorio")]
+        [EmailAddress(ErrorMessage = "El correo electrónico no es válido")]
+        [Display(Name = "Correo electrónico")]
         public string Email { get; set; } = "";
 
-        [Required]
-        [StringLength(100, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 6)]
+        [Required(ErrorMessage = "La contraseña es obligatoria")]
+        [StringLength(100, ErrorMessage = "La {0} debe tener al menos {2} y máximo {1} caracteres.", MinimumLength = 6)]
         [DataType(DataType.Password)]
-        [Display(Name = "Password")]
+        [Display(Name = "Contraseña")]
         public string Password { get; set; } = "";
 
         [DataType(DataType.Password)]
-        [Display(Name = "Confirm password")]
-        [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
+        [Display(Name = "Confirmar contraseña")]
+        [Compare("Password", ErrorMessage = "La contraseña y la confirmación no coinciden.")]
         public string ConfirmPassword { get; set; } = "";
     }
 }

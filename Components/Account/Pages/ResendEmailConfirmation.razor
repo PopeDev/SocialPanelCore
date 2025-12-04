@@ -1,4 +1,4 @@
-﻿@page "/Account/ResendEmailConfirmation"
+@page "/Account/ResendEmailConfirmation"
 
 @using System.ComponentModel.DataAnnotations
 @using System.Text
@@ -12,26 +12,51 @@
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
 
-<PageTitle>Resend email confirmation</PageTitle>
+<PageTitle>Reenviar confirmación de correo</PageTitle>
 
-<h1>Resend email confirmation</h1>
-<h2>Enter your email.</h2>
-<hr />
-<StatusMessage Message="@message" />
-<div class="row">
-    <div class="col-md-4">
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    <MudPaper Elevation="4" Class="pa-8">
+        <div class="d-flex flex-column align-center mb-4">
+            <MudIcon Icon="@Icons.Material.Filled.MailOutline" Size="Size.Large" Color="Color.Info" />
+            <MudText Typo="Typo.h4" Class="mt-2">Reenviar confirmación de correo</MudText>
+            <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center">
+                Ingresa tu correo electrónico para reenviar el enlace de confirmación
+            </MudText>
+        </div>
+
+        <StatusMessage Message="@message" />
+
         <EditForm Model="Input" FormName="resend-email-confirmation" OnValidSubmit="OnValidSubmitAsync" method="post">
             <DataAnnotationsValidator />
-            <ValidationSummary class="text-danger" role="alert" />
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" aria-required="true" placeholder="name@example.com" />
-                <label for="Input.Email" class="form-label">Email</label>
-                <ValidationMessage For="() => Input.Email" class="text-danger" />
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Resend</button>
+
+            <MudTextField @bind-Value="Input.Email"
+                          Label="Correo electrónico"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Required="true"
+                          RequiredError="El correo es obligatorio"
+                          Class="mb-4"
+                          Placeholder="correo@ejemplo.com" />
+
+            <MudButton ButtonType="ButtonType.Submit"
+                       Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       Size="Size.Large"
+                       Class="mb-4">
+                Reenviar
+            </MudButton>
         </EditForm>
-    </div>
-</div>
+
+        <MudDivider Class="my-4" />
+
+        <div class="d-flex justify-center">
+            <MudLink Href="Account/Login" Typo="Typo.body2">
+                Volver al inicio de sesión
+            </MudLink>
+        </div>
+    </MudPaper>
+</MudContainer>
 
 @code {
     private string? message;
@@ -49,7 +74,7 @@
         var user = await UserManager.FindByEmailAsync(Input.Email!);
         if (user is null)
         {
-            message = "Verification email sent. Please check your email.";
+            message = "Correo de verificación enviado. Por favor revisa tu correo.";
             return;
         }
 
@@ -61,13 +86,13 @@
             new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code });
         await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
 
-        message = "Verification email sent. Please check your email.";
+        message = "Correo de verificación enviado. Por favor revisa tu correo.";
     }
 
     private sealed class InputModel
     {
-        [Required]
-        [EmailAddress]
+        [Required(ErrorMessage = "El correo electrónico es obligatorio")]
+        [EmailAddress(ErrorMessage = "El correo electrónico no es válido")]
         public string Email { get; set; } = "";
     }
 }
