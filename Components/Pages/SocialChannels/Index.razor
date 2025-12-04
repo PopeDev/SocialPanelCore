@@ -1,0 +1,219 @@
+@page "/social-channels"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Domain.Enums
+@using SocialPanelCore.Components.Shared.Dialogs
+@inject IAccountService AccountService
+@inject ISocialChannelConfigService SocialChannelConfigService
+@inject ISnackbar Snackbar
+
+<PageTitle>Configuración de Redes Sociales</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Configuración de Redes Sociales</MudText>
+
+<MudGrid>
+    <!-- Selector de Cuenta -->
+    <MudItem xs="12">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudSelect T="Guid" Label="Seleccionar Cuenta"
+                           Value="_selectedAccountId"
+                           ValueChanged="OnAccountChanged"
+                           AdornmentIcon="@Icons.Material.Filled.Business"
+                           Adornment="Adornment.Start">
+                    @foreach (var account in _accounts)
+                    {
+                        <MudSelectItem Value="@account.Id">@account.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    @if (_selectedAccountId != Guid.Empty && _channels.Any())
+    {
+        <!-- Tarjetas de Redes Sociales -->
+        @foreach (var network in Enum.GetValues<NetworkType>())
+        {
+            var channel = _channels.FirstOrDefault(c => c.NetworkType == network);
+            var isConfigured = channel != null;
+            var isHealthy = channel?.HealthStatus == HealthStatus.OK;
+
+            <MudItem xs="12" sm="6" md="4">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div class="d-flex justify-space-between align-center">
+                                <MudText Typo="Typo.h6">@GetNetworkName(network)</MudText>
+                                @if (isConfigured)
+                                {
+                                    <MudIcon Icon="@(isHealthy ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)"
+                                             Color="@(isHealthy ? Color.Success : Color.Error)" />
+                                }
+                            </div>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (isConfigured && channel != null)
+                        {
+                            <MudText Typo="Typo.body2" Class="mb-2">
+                                <strong>Estado:</strong> @GetHealthStatusName(channel.HealthStatus)
+                            </MudText>
+                            @if (!string.IsNullOrEmpty(channel.Handle))
+                            {
+                                <MudText Typo="Typo.body2" Class="mb-2">
+                                    <strong>Handle:</strong> @channel.Handle
+                                </MudText>
+                            }
+                            <MudText Typo="Typo.body2" Class="mb-2">
+                                <strong>Habilitado:</strong> @(channel.IsEnabled ? "Sí" : "No")
+                            </MudText>
+                            @if (channel.TokenExpiresAt.HasValue)
+                            {
+                                var daysToExpire = (channel.TokenExpiresAt.Value - DateTime.UtcNow).Days;
+                                <MudText Typo="Typo.body2" Color="@(daysToExpire < 7 ? Color.Warning : Color.Default)">
+                                    <strong>Token expira:</strong> en @daysToExpire días
+                                </MudText>
+                            }
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true">
+                                No configurado
+                            </MudAlert>
+                        }
+                    </MudCardContent>
+                    <MudCardActions>
+                        @if (isConfigured && channel != null)
+                        {
+                            <MudButton Size="Size.Small"
+                                       Color="Color.Primary"
+                                       OnClick="@(() => ConfigureNetwork(network, channel))">
+                                Reconfigurar
+                            </MudButton>
+                            <MudButton Size="Size.Small"
+                                       Color="@(channel.IsEnabled ? Color.Default : Color.Success)"
+                                       OnClick="@(() => ToggleChannel(channel))">
+                                @(channel.IsEnabled ? "Deshabilitar" : "Habilitar")
+                            </MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Size="Size.Small"
+                                       Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       OnClick="@(() => ConfigureNetwork(network, null))">
+                                Configurar OAuth
+                            </MudButton>
+                        }
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    }
+    else if (_selectedAccountId != Guid.Empty)
+    {
+        <MudItem xs="12">
+            <MudAlert Severity="Severity.Info">
+                No hay redes sociales configuradas para esta cuenta. Haga clic en "Configurar OAuth" para comenzar.
+            </MudAlert>
+        </MudItem>
+    }
+    else
+    {
+        <MudItem xs="12">
+            <MudAlert Severity="Severity.Info">
+                Seleccione una cuenta para gestionar sus redes sociales.
+            </MudAlert>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private List<Account> _accounts = new();
+    private List<SocialChannelConfig> _channels = new();
+    private Guid _selectedAccountId = Guid.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccounts();
+    }
+
+    private async Task LoadAccounts()
+    {
+        _accounts = (await AccountService.GetAllAccountsAsync()).ToList();
+        if (_accounts.Any())
+        {
+            _selectedAccountId = _accounts.First().Id;
+            await LoadChannels();
+        }
+    }
+
+    private async Task OnAccountChanged(Guid accountId)
+    {
+        _selectedAccountId = accountId;
+        await LoadChannels();
+    }
+
+    private async Task LoadChannels()
+    {
+        if (_selectedAccountId == Guid.Empty) return;
+
+        _channels = (await SocialChannelConfigService.GetChannelConfigsByAccountAsync(_selectedAccountId)).ToList();
+    }
+
+    private async Task ToggleChannel(SocialChannelConfig channel)
+    {
+        try
+        {
+            if (channel.IsEnabled)
+            {
+                await SocialChannelConfigService.DisableChannelAsync(channel.Id);
+                Snackbar.Add($"Canal deshabilitado exitosamente", Severity.Success);
+            }
+            else
+            {
+                await SocialChannelConfigService.EnableChannelAsync(channel.Id);
+                Snackbar.Add($"Canal habilitado exitosamente", Severity.Success);
+            }
+            await LoadChannels();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void ConfigureNetwork(NetworkType network, SocialChannelConfig? existing)
+    {
+        Snackbar.Add($"OAuth para {GetNetworkName(network)} - Implementación pendiente", Severity.Info);
+        // TODO: Implementar flujo OAuth real
+        // Por ahora solo mostramos mensaje informativo
+    }
+
+    private string GetNetworkName(NetworkType network)
+    {
+        return network switch
+        {
+            NetworkType.Facebook => "Facebook",
+            NetworkType.Instagram => "Instagram",
+            NetworkType.TikTok => "TikTok",
+            NetworkType.X => "X (Twitter)",
+            NetworkType.YouTube => "YouTube",
+            NetworkType.LinkedIn => "LinkedIn",
+            _ => network.ToString()
+        };
+    }
+
+    private string GetHealthStatusName(HealthStatus status)
+    {
+        return status switch
+        {
+            HealthStatus.OK => "Conectado",
+            HealthStatus.KO => "Error de conexión",
+            _ => status.ToString()
+        };
+    }
+}

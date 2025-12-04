@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet new:*)",
+      "Bash(dotnet sln add:*)",
+      "Bash(dotnet sln:*)",
+      "Bash(dotnet add reference:*)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet build:*)",
+      "Bash(for file in AccountService.cs BasePostService.cs ContentAdaptationService.cs SocialChannelConfigService.cs SocialPublisherService.cs)",
+      "Bash(do sed -i 's/namespace SocialPanelCore.Application.Services/namespace SocialPanelCore.Infrastructure.Services/g' \"$file\")",
+      "Bash(done)",
+      "Bash(move SocialPanelCoreSocialPanelCore.Domain .)",
+      "Bash(move SocialPanelCoreSocialPanelCore.Application .)",
+      "Bash(move SocialPanelCoreSocialPanelCore.Infrastructure .)",
+      "Bash(dotnet clean:*)",
+      "Bash(dotnet ef migrations add:*)",
+      "Bash(dotnet ef migrations remove:*)",
+      "Bash(test:*)",
+      "Bash(find:*)",
+      "Bash(dotnet restore:*)",
+      "Bash(xargs -I {} sh -c 'if ! grep -q \"\"\"\"^@using SocialPanelCore.Domain.Entities\"\"\"\" {} && ! grep -q \"\"\"\"^using SocialPanelCore.Domain.Entities\"\"\"\" {}; then sed -i \"\"\"\"1i@using SocialPanelCore.Domain.Entities\"\"\"\" {}; fi')",
+      "Bash(dotnet ef database update:*)",
+      "Bash(sc query:*)",
+      "Bash(where:*)",
+      "Bash(where postgres:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,96 @@
+@using SocialPanelCore.Domain.Interfaces
+@inject IBasePostService BasePostService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_formIsValid">
+            @if (IsApproval)
+            {
+                <MudAlert Severity="Severity.Success" Class="mb-4">
+                    Al aprobar esta publicación, pasará automáticamente a estado <strong>Planificada</strong> y entrará en el flujo de adaptación y publicación automática.
+                </MudAlert>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Warning" Class="mb-4">
+                    Al rechazar esta publicación, volverá a estado <strong>Borrador</strong> para que el autor pueda editarla.
+                </MudAlert>
+            }
+
+            <MudTextField Label="Notas de revisión"
+                          @bind-Value="_notes"
+                          Lines="4"
+                          Required="@(!IsApproval)"
+                          RequiredError="Las notas son obligatorias al rechazar"
+                          HelperText="@(IsApproval ? "(Opcional) Comentarios sobre la aprobación" : "(Obligatorio) Explica por qué se rechaza")"
+                          MaxLength="500"
+                          Counter="500"
+                          Immediate="true" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="@(IsApproval ? Color.Success : Color.Error)"
+                   Variant="Variant.Filled"
+                   OnClick="Submit"
+                   Disabled="@(!_formIsValid)">
+            @(IsApproval ? "Aprobar" : "Rechazar")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IDialogReference MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public Guid PostId { get; set; }
+
+    [Parameter]
+    public bool IsApproval { get; set; }
+
+    private MudForm _form = null!;
+    private bool _formIsValid;
+    private string _notes = string.Empty;
+
+    private void Cancel()
+    {
+        MudDialog.Close(DialogResult.Cancel());
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_formIsValid) return;
+
+        try
+        {
+            // Obtener el ID del usuario actual
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userIdClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+
+            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+            {
+                throw new InvalidOperationException("No se pudo obtener el ID del usuario");
+            }
+
+            if (IsApproval)
+            {
+                await BasePostService.ApprovePostAsync(PostId, userId, string.IsNullOrWhiteSpace(_notes) ? null : _notes);
+            }
+            else
+            {
+                await BasePostService.RejectPostAsync(PostId, userId, _notes);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch
+        {
+            // El error será manejado por el componente padre
+            MudDialog.Close(DialogResult.Cancel());
+            throw;
+        }
+    }
+}

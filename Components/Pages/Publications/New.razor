@@ -1,0 +1,411 @@
+@page "/publications/new"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Domain.Enums
+@inject IAccountService AccountService
+@inject IBasePostService BasePostService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Nueva Publicación</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Nueva Publicación</MudText>
+
+<MudForm @ref="_form" @bind-IsValid="@_formIsValid">
+    <MudGrid>
+        <!-- Información Básica -->
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Información Básica</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudSelect T="Guid"
+                               Label="Cuenta"
+                               @bind-Value="_model.AccountId"
+                               Required="true"
+                               RequiredError="Debe seleccionar una cuenta"
+                               AdornmentIcon="@Icons.Material.Filled.Business"
+                               Adornment="Adornment.Start">
+                        @foreach (var account in _accounts)
+                        {
+                            <MudSelectItem Value="@account.Id">@account.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudTextField Label="Título"
+                                  @bind-Value="_model.Title"
+                                  Required="true"
+                                  RequiredError="El título es obligatorio"
+                                  MaxLength="200"
+                                  Counter="200"
+                                  Immediate="true"
+                                  Class="mt-4" />
+
+                    <MudTextField Label="Contenido Original"
+                                  @bind-Value="_model.Content"
+                                  Required="true"
+                                  RequiredError="El contenido es obligatorio"
+                                  Lines="6"
+                                  MaxLength="5000"
+                                  Counter="5000"
+                                  Immediate="true"
+                                  Class="mt-4"
+                                  HelperText="Este texto será adaptado automáticamente para cada red social" />
+
+                    <MudCheckBox @bind-Value="_model.ScheduleNow"
+                                 Label="Publicar inmediatamente (las variantes se generarán en segundo plano)"
+                                 Class="mt-4" />
+
+                    @if (!_model.ScheduleNow)
+                    {
+                        <MudDatePicker Label="Fecha de Publicación"
+                                       @bind-Date="_model.ScheduledDate"
+                                       MinDate="DateTime.Today"
+                                       Required="true"
+                                       Class="mt-4" />
+
+                        <MudTimePicker Label="Hora de Publicación"
+                                       @bind-Time="_model.ScheduledTime"
+                                       Required="true"
+                                       Class="mt-4" />
+                    }
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Redes Objetivo -->
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Redes Sociales Objetivo</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                        Seleccione las redes sociales donde desea publicar. El contenido será adaptado automáticamente para cada una.
+                    </MudText>
+
+                    <MudGrid>
+                        @foreach (var network in Enum.GetValues<NetworkType>())
+                        {
+                            <MudItem xs="6" sm="4">
+                                <MudCheckBox @bind-Value="@_selectedNetworks[network]"
+                                             Label="@GetNetworkName(network)"
+                                             Color="Color.Primary" />
+                            </MudItem>
+                        }
+                    </MudGrid>
+
+                    @if (!_selectedNetworks.Values.Any(v => v))
+                    {
+                        <MudAlert Severity="Severity.Warning" Class="mt-3" Dense="true">
+                            Debe seleccionar al menos una red social
+                        </MudAlert>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Medios -->
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Medios (Opcional)</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudFileUpload T="IBrowserFile"
+                                   Accept="image/*,video/*"
+                                   OnFilesChanged="@OnFilesSelected"
+                                   MaximumFileCount="10">
+                        <ActivatorContent>
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.CloudUpload"
+                                       FullWidth="true">
+                                Subir Archivos
+                            </MudButton>
+                        </ActivatorContent>
+                    </MudFileUpload>
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                        Máximo 10 archivos. Imágenes y videos permitidos.
+                    </MudText>
+
+                    @if (_uploadedFiles.Any())
+                    {
+                        <MudList T="string" Dense="true" Class="mt-3">
+                            @foreach (var file in _uploadedFiles)
+                            {
+                                <MudListItem T="string">
+                                    <div class="d-flex justify-space-between align-center">
+                                        <MudText Typo="Typo.body2">@file.Name</MudText>
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                       Size="Size.Small"
+                                                       Color="Color.Error"
+                                                       OnClick="@(() => RemoveFile(file))" />
+                                    </div>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    }
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Previsualización -->
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Previsualización</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.body2" Class="mb-2"><strong>Título:</strong></MudText>
+                    <MudText Typo="Typo.body2" Color="@(_model.Title.Length > 0 ? Color.Default : Color.Secondary)">
+                        @(_model.Title.Length > 0 ? _model.Title : "Sin título")
+                    </MudText>
+
+                    <MudDivider Class="my-3" />
+
+                    <MudText Typo="Typo.body2" Class="mb-2"><strong>Contenido:</strong></MudText>
+                    <MudText Typo="Typo.body2" Color="@(_model.Content.Length > 0 ? Color.Default : Color.Secondary)">
+                        @(_model.Content.Length > 0 ? _model.Content : "Sin contenido")
+                    </MudText>
+
+                    <MudDivider Class="my-3" />
+
+                    <MudText Typo="Typo.body2" Class="mb-2"><strong>Redes seleccionadas:</strong></MudText>
+                    @if (_selectedNetworks.Values.Any(v => v))
+                    {
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach (var kvp in _selectedNetworks.Where(x => x.Value))
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                    @GetNetworkName(kvp.Key)
+                                </MudChip>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Ninguna red seleccionada
+                        </MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <!-- Acciones -->
+        <MudItem xs="12">
+            <MudCard Elevation="2">
+                <MudCardActions>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               OnClick="SaveAsDraft"
+                               Disabled="@_processing">
+                        Guardar Borrador
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.Schedule"
+                               OnClick="SaveAndSchedule"
+                               Disabled="@(!_formIsValid || !_selectedNetworks.Values.Any(v => v) || _processing)">
+                        @if (_processing)
+                        {
+                            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                            <MudText Class="ms-2">Guardando...</MudText>
+                        }
+                        else
+                        {
+                            <span>@(_model.ScheduleNow ? "Publicar Ahora" : "Programar Publicación")</span>
+                        }
+                    </MudButton>
+                    <MudButton Variant="Variant.Text"
+                               Color="Color.Default"
+                               StartIcon="@Icons.Material.Filled.Cancel"
+                               OnClick="Cancel"
+                               Disabled="@_processing">
+                        Cancelar
+                    </MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudForm>
+
+@code {
+    private MudForm _form = null!;
+    private bool _formIsValid;
+    private bool _processing;
+
+    private List<Account> _accounts = new();
+    private PublicationModel _model = new();
+    private Dictionary<NetworkType, bool> _selectedNetworks = new();
+    private List<IBrowserFile> _uploadedFiles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Inicializar diccionario de redes
+        foreach (var network in Enum.GetValues<NetworkType>())
+        {
+            _selectedNetworks[network] = false;
+        }
+
+        await LoadAccounts();
+    }
+
+    private async Task LoadAccounts()
+    {
+        _accounts = (await AccountService.GetAllAccountsAsync()).ToList();
+        if (_accounts.Any())
+        {
+            _model.AccountId = _accounts.First().Id;
+        }
+    }
+
+    private Task OnFilesSelected(InputFileChangeEventArgs e)
+    {
+        _uploadedFiles.Clear();
+        foreach (var file in e.GetMultipleFiles(10))
+        {
+            _uploadedFiles.Add(file);
+        }
+        return Task.CompletedTask;
+    }
+
+    private void RemoveFile(IBrowserFile file)
+    {
+        _uploadedFiles.Remove(file);
+    }
+
+    private async Task SaveAsDraft()
+    {
+        await _form.Validate();
+        if (!_formIsValid) return;
+
+        _processing = true;
+        try
+        {
+            var selectedNetworks = _selectedNetworks.Where(x => x.Value).Select(x => x.Key).ToList();
+
+            // Create as draft with a default scheduled date
+            var scheduledDate = DateTime.UtcNow.AddDays(1);
+
+            await BasePostService.CreatePostAsync(
+                _model.AccountId,
+                null, // createdByUserId
+                _model.Content,
+                scheduledDate,
+                selectedNetworks,
+                _model.Title,
+                BasePostState.Borrador
+            );
+
+            Snackbar.Add("Borrador guardado exitosamente", Severity.Success);
+            Navigation.NavigateTo("/publications");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task SaveAndSchedule()
+    {
+        await _form.Validate();
+        if (!_formIsValid) return;
+
+        if (!_selectedNetworks.Values.Any(v => v))
+        {
+            Snackbar.Add("Debe seleccionar al menos una red social", Severity.Warning);
+            return;
+        }
+
+        _processing = true;
+        try
+        {
+            var selectedNetworks = _selectedNetworks.Where(x => x.Value).Select(x => x.Key).ToList();
+
+            // Determinar fecha de publicación
+            DateTime scheduledDate;
+            if (_model.ScheduleNow)
+            {
+                scheduledDate = DateTime.UtcNow;
+            }
+            else if (_model.ScheduledDate.HasValue && _model.ScheduledTime.HasValue)
+            {
+                scheduledDate = _model.ScheduledDate.Value.Date + _model.ScheduledTime.Value;
+            }
+            else
+            {
+                scheduledDate = DateTime.UtcNow;
+            }
+
+            // Crear publicación con estado Planificada
+            await BasePostService.CreatePostAsync(
+                _model.AccountId,
+                null, // createdByUserId
+                _model.Content,
+                scheduledDate,
+                selectedNetworks,
+                _model.Title,
+                BasePostState.Planificada
+            );
+
+            Snackbar.Add(
+                _model.ScheduleNow
+                    ? "Publicación creada. Las variantes se generarán automáticamente."
+                    : "Publicación programada exitosamente",
+                Severity.Success);
+            Navigation.NavigateTo("/publications");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/publications");
+    }
+
+    private string GetNetworkName(NetworkType network)
+    {
+        return network switch
+        {
+            NetworkType.Facebook => "Facebook",
+            NetworkType.Instagram => "Instagram",
+            NetworkType.TikTok => "TikTok",
+            NetworkType.X => "X (Twitter)",
+            NetworkType.YouTube => "YouTube",
+            NetworkType.LinkedIn => "LinkedIn",
+            _ => network.ToString()
+        };
+    }
+
+    private class PublicationModel
+    {
+        public Guid AccountId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public bool ScheduleNow { get; set; } = true;
+        public DateTime? ScheduledDate { get; set; }
+        public TimeSpan? ScheduledTime { get; set; }
+    }
+}

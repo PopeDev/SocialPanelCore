@@ -1,0 +1,265 @@
+﻿@page "/"
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Domain.Enums
+@inject IAccountService AccountService
+@inject ISocialChannelConfigService SocialChannelConfigService
+@inject IBasePostService BasePostService
+
+<PageTitle>Dashboard - Panel de Redes Sociales</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Dashboard</MudText>
+
+<MudGrid>
+    <!-- Tarjetas de estadísticas -->
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <div class="d-flex justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Total Cuentas</MudText>
+                        <MudText Typo="Typo.h4">@_totalAccounts</MudText>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.Business" Color="Color.Primary" Size="Size.Large" />
+                </div>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <div class="d-flex justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Redes Configuradas</MudText>
+                        <MudText Typo="Typo.h4">@_totalChannels</MudText>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.Share" Color="Color.Success" Size="Size.Large" />
+                </div>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <div class="d-flex justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Publicaciones Planificadas</MudText>
+                        <MudText Typo="Typo.h4">@_scheduledPosts</MudText>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.Schedule" Color="Color.Info" Size="Size.Large" />
+                </div>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" sm="6" md="3">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <div class="d-flex justify-space-between">
+                    <div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Publicadas Este Mes</MudText>
+                        <MudText Typo="Typo.h4">@_publishedThisMonth</MudText>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                </div>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <!-- Acciones rápidas -->
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Acciones Rápidas</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudStack Spacing="2">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Add"
+                               Href="/publications/new"
+                               FullWidth="true">
+                        Nueva Publicación
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Business"
+                               Href="/accounts"
+                               FullWidth="true">
+                        Gestionar Cuentas
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Share"
+                               Href="/social-channels"
+                               FullWidth="true">
+                        Configurar Redes Sociales
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.CalendarMonth"
+                               Href="/publications"
+                               FullWidth="true">
+                        Ver Calendario
+                    </MudButton>
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <!-- Estado de redes sociales -->
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Estado de Redes Sociales</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (_channelsByNetwork.Any())
+                {
+                    <MudList T="string" Dense="true">
+                        @foreach (var network in _channelsByNetwork)
+                        {
+                            <MudListItem T="string">
+                                <div class="d-flex justify-space-between align-center">
+                                    <div>
+                                        <MudText Typo="Typo.body1">@network.Key</MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                            @network.Value.Active activas de @network.Value.Total
+                                        </MudText>
+                                    </div>
+                                    <MudChip T="string" Size="Size.Small"
+                                             Color="@(network.Value.Active > 0 ? Color.Success : Color.Default)">
+                                        @network.Value.Active/@network.Value.Total
+                                    </MudChip>
+                                </div>
+                            </MudListItem>
+                            <MudDivider />
+                        }
+                    </MudList>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info">
+                        No hay redes sociales configuradas todavía.
+                    </MudAlert>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <!-- Últimas publicaciones -->
+    <MudItem xs="12">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Últimas Publicaciones</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (_recentPosts.Any())
+                {
+                    <MudTable Items="@_recentPosts" Dense="true" Hover="true">
+                        <HeaderContent>
+                            <MudTh>Título</MudTh>
+                            <MudTh>Estado</MudTh>
+                            <MudTh>Fecha Programada</MudTh>
+                            <MudTh>Redes</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Título">@context.Title</MudTd>
+                            <MudTd DataLabel="Estado">
+                                <MudChip T="string" Size="Size.Small" Color="@GetStateColor(context.State)">
+                                    @GetStateName(context.State)
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Fecha">
+                                @context.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                            </MudTd>
+                            <MudTd DataLabel="Redes">@context.TargetNetworks.Count redes</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info">
+                        No hay publicaciones todavía. <MudLink Href="/publications/new">Crear primera publicación</MudLink>
+                    </MudAlert>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private int _totalAccounts = 0;
+    private int _totalChannels = 0;
+    private int _scheduledPosts = 0;
+    private int _publishedThisMonth = 0;
+    private List<BasePost> _recentPosts = new();
+    private Dictionary<string, (int Total, int Active)> _channelsByNetwork = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        try
+        {
+            // Cargar estadísticas de cuentas
+            var accounts = await AccountService.GetAllAccountsAsync();
+            _totalAccounts = accounts.Count();
+
+            // Cargar estadísticas de canales - simplificado sin llamar métodos que no existen
+            _totalChannels = 0;
+            _channelsByNetwork = new Dictionary<string, (int Total, int Active)>();
+
+            // Sin publicaciones por ahora - se implementarán después
+            _recentPosts = new List<BasePost>();
+            _scheduledPosts = 0;
+            _publishedThisMonth = 0;
+        }
+        catch (Exception ex)
+        {
+            // En caso de error, mantener valores por defecto
+            Console.WriteLine($"Error loading dashboard data: {ex.Message}");
+        }
+    }
+
+    private Color GetStateColor(BasePostState state)
+    {
+        return state switch
+        {
+            BasePostState.Borrador => Color.Default,
+            BasePostState.Planificada => Color.Info,
+            BasePostState.AdaptacionPendiente => Color.Warning,
+            BasePostState.Adaptada => Color.Primary,
+            BasePostState.ParcialmentePublicada => Color.Warning,
+            BasePostState.Publicada => Color.Success,
+            BasePostState.Cancelada => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetStateName(BasePostState state)
+    {
+        return state switch
+        {
+            BasePostState.Borrador => "Borrador",
+            BasePostState.Planificada => "Planificada",
+            BasePostState.AdaptacionPendiente => "Pendiente",
+            BasePostState.Adaptada => "Adaptada",
+            BasePostState.ParcialmentePublicada => "Parcial",
+            BasePostState.Publicada => "Publicada",
+            BasePostState.Cancelada => "Cancelada",
+            _ => state.ToString()
+        };
+    }
+}

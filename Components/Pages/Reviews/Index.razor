@@ -1,0 +1,203 @@
+@page "/reviews"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+@attribute [Authorize(Roles = "Superadministrador")]
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Domain.Enums
+@inject IBasePostService BasePostService
+@inject IAccountService AccountService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-4">Revisión de Publicaciones</MudText>
+
+    <!-- Selector de Cuenta -->
+    <MudCard Elevation="2" Class="mb-4">
+        <MudCardContent>
+            <MudSelect T="Guid" Label="Cuenta" @bind-Value="_selectedAccountId" AdornmentIcon="@Icons.Material.Filled.Business" Adornment="Adornment.Start">
+                @foreach (var account in _accounts)
+                {
+                    <MudSelectItem Value="@account.Id">@account.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudCardContent>
+    </MudCard>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Class="my-4" />
+    }
+    else if (!_posts.Any())
+    {
+        <MudAlert Severity="Severity.Info">No hay publicaciones pendientes de revisión para esta cuenta.</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var post in _posts)
+            {
+                <MudItem xs="12" md="6">
+                    <MudCard Elevation="3">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">@(post.Title ?? "Sin título")</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Creada por @(post.CreatedByUser?.Name ?? "Usuario desconocido") el @post.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                                </MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText Typo="Typo.body2" Class="mb-2"><strong>Contenido:</strong></MudText>
+                            <MudPaper Elevation="0" Class="pa-3 mb-3" Style="background-color: #f5f5f5;">
+                                <MudText Typo="Typo.body2">@post.Content</MudText>
+                            </MudPaper>
+
+                            <MudText Typo="Typo.body2" Class="mb-2"><strong>Tipo:</strong> @GetContentTypeName(post.ContentType)</MudText>
+                            <MudText Typo="Typo.body2" Class="mb-2"><strong>Programada para:</strong> @post.ScheduledAtUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+
+                            <MudText Typo="Typo.body2" Class="mb-1"><strong>Redes objetivo:</strong></MudText>
+                            <MudChipSet T="string">
+                                @foreach (var network in post.TargetNetworks)
+                                {
+                                    <MudChip T="string" Color="Color.Primary" Size="Size.Small">@GetNetworkName(network.NetworkType)</MudChip>
+                                }
+                            </MudChipSet>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Check" OnClick="@(() => ApprovePost(post.Id))">
+                                Aprobar
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Close" OnClick="@(() => RejectPost(post.Id))">
+                                Rechazar
+                            </MudButton>
+                            <MudSpacer />
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Default" OnClick="@(() => ViewDetails(post.Id))" />
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private List<Account> _accounts = new();
+    private Guid _selectedAccountId;
+    private List<BasePost> _posts = new();
+    private bool _loading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccounts();
+        if (_accounts.Any())
+        {
+            _selectedAccountId = _accounts.First().Id;
+            await LoadPendingPosts();
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadPendingPosts();
+    }
+
+    private async Task LoadAccounts()
+    {
+        try
+        {
+            _accounts = (await AccountService.GetAllAccountsAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar cuentas: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadPendingPosts()
+    {
+        if (_selectedAccountId == Guid.Empty) return;
+
+        _loading = true;
+        try
+        {
+            _posts = (await BasePostService.GetPostsPendingReviewAsync(_selectedAccountId)).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar publicaciones: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ApprovePost(Guid postId)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(ReviewDialog.PostId), postId },
+            { nameof(ReviewDialog.IsApproval), true }
+        };
+
+        var dialog = await DialogService.ShowAsync<ReviewDialog>("Aprobar Publicación", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Publicación aprobada exitosamente", Severity.Success);
+            await LoadPendingPosts();
+        }
+    }
+
+    private async Task RejectPost(Guid postId)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(ReviewDialog.PostId), postId },
+            { nameof(ReviewDialog.IsApproval), false }
+        };
+
+        var dialog = await DialogService.ShowAsync<ReviewDialog>("Rechazar Publicación", parameters);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            Snackbar.Add("Publicación rechazada", Severity.Warning);
+            await LoadPendingPosts();
+        }
+    }
+
+    private void ViewDetails(Guid postId)
+    {
+        // TODO: Navegar a vista detallada
+        Snackbar.Add("Vista de detalles - Próximamente", Severity.Info);
+    }
+
+    private string GetContentTypeName(ContentType type)
+    {
+        return type switch
+        {
+            ContentType.FeedPost => "Publicación de Feed",
+            ContentType.Story => "Story",
+            ContentType.Reel => "Reel",
+            _ => type.ToString()
+        };
+    }
+
+    private string GetNetworkName(NetworkType network)
+    {
+        return network switch
+        {
+            NetworkType.Facebook => "Facebook",
+            NetworkType.Instagram => "Instagram",
+            NetworkType.TikTok => "TikTok",
+            NetworkType.X => "X (Twitter)",
+            NetworkType.YouTube => "YouTube",
+            NetworkType.LinkedIn => "LinkedIn",
+            _ => network.ToString()
+        };
+    }
+}

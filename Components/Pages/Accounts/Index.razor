@@ -1,0 +1,182 @@
+@page "/accounts"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Components.Shared.Dialogs
+@using SocialPanelCore.Components.Pages.Accounts
+@using Microsoft.Extensions.Logging
+@inject IAccountService AccountService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject ILogger<SocialPanelCore.Components.Pages.Accounts.Index> Logger
+
+<PageTitle>Gestión de Cuentas</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Gestión de Cuentas</MudText>
+
+<MudCard Elevation="2">
+    <MudCardContent>
+        <div class="d-flex justify-space-between mb-4">
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="Buscar cuentas..."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium"
+                          Immediate="true"
+                          Class="mt-0" />
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenCreateDialog">
+                Nueva Cuenta
+            </MudButton>
+        </div>
+
+        <MudTable Items="@_filteredAccounts"
+                  Dense="true"
+                  Hover="true"
+                  Loading="@_loading"
+                  LoadingProgressColor="Color.Primary">
+            <HeaderContent>
+                <MudTh>Nombre</MudTh>
+                <MudTh>Descripción</MudTh>
+                <MudTh>Creada</MudTh>
+                <MudTh Style="text-align: right">Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nombre">
+                    <MudText Typo="Typo.body2"><strong>@context.Name</strong></MudText>
+                </MudTd>
+                <MudTd DataLabel="Descripción">
+                    <MudText Typo="Typo.body2">@(context.Description ?? "-")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Creada">
+                    <MudText Typo="Typo.body2">@context.CreatedAt.ToString("dd/MM/yyyy")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Acciones" Style="text-align: right">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OpenEditDialog(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(() => DeleteAccount(context))" />
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText>No se encontraron cuentas</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private List<Account> _accounts = new();
+    private List<Account> _filteredAccounts = new();
+    private string _searchString = string.Empty;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccounts();
+    }
+
+    private async Task LoadAccounts()
+    {
+        _loading = true;
+        try
+        {
+            _accounts = (await AccountService.GetAllAccountsAsync()).ToList();
+            FilterAccounts();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void FilterAccounts()
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+        {
+            _filteredAccounts = _accounts;
+        }
+        else
+        {
+            _filteredAccounts = _accounts.Where(a =>
+                a.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                (a.Description?.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ?? false)
+            ).ToList();
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        Logger?.LogInformation("OpenCreateDialog invoked");
+        var parameters = new DialogParameters
+        {
+            { nameof(AccountDialog.Account), null },
+            { nameof(AccountDialog.IsEditMode), false }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AccountDialog>("Nueva Cuenta", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await LoadAccounts();
+            Snackbar.Add("Cuenta creada exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditDialog(Account account)
+    {
+        Logger?.LogInformation("OpenEditDialog invoked for {AccountId}", account.Id);
+        var parameters = new DialogParameters
+        {
+            { nameof(AccountDialog.Account), account },
+            { nameof(AccountDialog.IsEditMode), true }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<AccountDialog>("Editar Cuenta", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await LoadAccounts();
+            Snackbar.Add("Cuenta actualizada exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task DeleteAccount(Account account)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(ConfirmDialog.ContentText), $"¿Está seguro de que desea eliminar la cuenta '{account.Name}'? Esta acción no se puede deshacer." },
+            { nameof(ConfirmDialog.ButtonText), "Eliminar" },
+            { nameof(ConfirmDialog.Color), Color.Error }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            try
+            {
+                await AccountService.DeleteAccountAsync(account.Id);
+                await LoadAccounts();
+                Snackbar.Add("Cuenta eliminada exitosamente", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error al eliminar la cuenta: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

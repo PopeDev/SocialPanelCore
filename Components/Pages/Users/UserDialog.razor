@@ -1,0 +1,133 @@
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Domain.Enums
+@inject IUserService UserService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_formIsValid">
+            <MudTextField Label="Nombre"
+                          @bind-Value="_model.Name"
+                          Required="true"
+                          RequiredError="El nombre es obligatorio"
+                          MaxLength="200"
+                          Counter="200"
+                          Immediate="true" />
+
+            <MudTextField Label="Email"
+                          @bind-Value="_model.Email"
+                          Required="true"
+                          RequiredError="El email es obligatorio"
+                          Validation="@(new EmailAddressAttribute())"
+                          MaxLength="256"
+                          Immediate="true"
+                          Class="mt-4" />
+
+            <MudSelect Label="Rol"
+                       @bind-Value="_model.Role"
+                       Required="true"
+                       RequiredError="El rol es obligatorio"
+                       Class="mt-4">
+                <MudSelectItem Value="@UserRole.UsuarioBasico">Usuario Básico</MudSelectItem>
+                <MudSelectItem Value="@UserRole.Superadministrador">Superadministrador</MudSelectItem>
+            </MudSelect>
+
+            @if (_model.Role == UserRole.UsuarioBasico)
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-4">
+                    Los usuarios básicos solo pueden ver y gestionar las cuentas que les sean asignadas.
+                </MudAlert>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Warning" Class="mt-4">
+                    Los superadministradores tienen acceso completo al sistema.
+                </MudAlert>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="Submit"
+                   Disabled="@(!_formIsValid || _processing)">
+            @if (_processing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Guardando...</MudText>
+            }
+            else
+            {
+                <MudText>@(IsEditMode ? "Actualizar" : "Crear")</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IDialogReference MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public User? User { get; set; }
+
+    [Parameter]
+    public bool IsEditMode { get; set; }
+
+    private MudForm _form = null!;
+    private bool _formIsValid;
+    private bool _processing;
+
+    private UserModel _model = new();
+
+    protected override void OnInitialized()
+    {
+        if (User != null)
+        {
+            _model.Name = User.Name ?? string.Empty;
+            _model.Email = User.Email ?? string.Empty;
+            _model.Role = User.Role;
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog?.Close(DialogResult.Cancel());
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_formIsValid)
+            return;
+
+        _processing = true;
+
+        try
+        {
+            if (IsEditMode && User != null)
+            {
+                await UserService.UpdateUserAsync(User.Id, _model.Name, _model.Email, _model.Role);
+            }
+            else
+            {
+                await UserService.CreateUserAsync(_model.Name, _model.Email, _model.Role);
+            }
+
+            MudDialog?.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private class UserModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public UserRole Role { get; set; } = UserRole.UsuarioBasico;
+    }
+}

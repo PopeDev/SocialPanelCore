@@ -1,0 +1,196 @@
+@page "/users"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+@attribute [Authorize(Roles = "Superadministrador")]
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Domain.Enums
+@using SocialPanelCore.Components.Shared.Dialogs
+@inject IUserService UserService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>Gestión de Usuarios</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Gestión de Usuarios</MudText>
+
+<MudCard Elevation="2">
+    <MudCardContent>
+        <div class="d-flex justify-space-between mb-4">
+            <MudTextField @bind-Value="_searchString"
+                          Placeholder="Buscar usuarios..."
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          IconSize="Size.Medium"
+                          Immediate="true"
+                          Class="mt-0" />
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="OpenCreateDialog">
+                Nuevo Usuario
+            </MudButton>
+        </div>
+
+        <MudTable Items="@_filteredUsers"
+                  Dense="true"
+                  Hover="true"
+                  Loading="@_loading"
+                  LoadingProgressColor="Color.Primary">
+            <HeaderContent>
+                <MudTh>Nombre</MudTh>
+                <MudTh>Email</MudTh>
+                <MudTh>Rol</MudTh>
+                <MudTh>Creado</MudTh>
+                <MudTh Style="text-align: right">Acciones</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Nombre">
+                    <MudText Typo="Typo.body2"><strong>@context.Name</strong></MudText>
+                </MudTd>
+                <MudTd DataLabel="Email">
+                    <MudText Typo="Typo.body2">@context.Email</MudText>
+                </MudTd>
+                <MudTd DataLabel="Rol">
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Role == UserRole.Superadministrador ? Color.Error : Color.Info)">
+                        @GetRoleName(context.Role)
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Creado">
+                    <MudText Typo="Typo.body2">@context.CreatedAt.ToString("dd/MM/yyyy")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Acciones" Style="text-align: right">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   OnClick="@(() => OpenEditDialog(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@(() => DeleteUser(context))" />
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText>No se encontraron usuarios</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    private List<User> _users = new();
+    private List<User> _filteredUsers = new();
+    private string _searchString = string.Empty;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        _loading = true;
+        try
+        {
+            _users = (await UserService.GetAllUsersAsync()).ToList();
+            FilterUsers();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void FilterUsers()
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+        {
+            _filteredUsers = _users;
+        }
+        else
+        {
+            _filteredUsers = _users.Where(u =>
+                u.Name.Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                (u.Email != null && u.Email.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+        }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(UserDialog.User), null },
+            { nameof(UserDialog.IsEditMode), false }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UserDialog>("Nuevo Usuario", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await LoadUsers();
+            Snackbar.Add("Usuario creado exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task OpenEditDialog(User user)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(UserDialog.User), user },
+            { nameof(UserDialog.IsEditMode), true }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UserDialog>("Editar Usuario", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            await LoadUsers();
+            Snackbar.Add("Usuario actualizado exitosamente", Severity.Success);
+        }
+    }
+
+    private async Task DeleteUser(User user)
+    {
+        var parameters = new DialogParameters
+        {
+            { nameof(ConfirmDialog.ContentText), $"¿Está seguro de que desea eliminar al usuario '{user.Name}'? Esta acción no se puede deshacer." },
+            { nameof(ConfirmDialog.ButtonText), "Eliminar" },
+            { nameof(ConfirmDialog.Color), Color.Error }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar Eliminación", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            try
+            {
+                await UserService.DeleteUserAsync(user.Id);
+                await LoadUsers();
+                Snackbar.Add("Usuario eliminado exitosamente", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error al eliminar el usuario: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private string GetRoleName(UserRole role)
+    {
+        return role switch
+        {
+            UserRole.Superadministrador => "Superadmin",
+            UserRole.UsuarioBasico => "Usuario Básico",
+            _ => role.ToString()
+        };
+    }
+}

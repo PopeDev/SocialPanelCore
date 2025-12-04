@@ -1,0 +1,107 @@
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@inject IAccountService AccountService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_formIsValid">
+            <MudTextField Label="Nombre"
+                          @bind-Value="_model.Name"
+                          Required="true"
+                          RequiredError="El nombre es obligatorio"
+                          MaxLength="200"
+                          Counter="200"
+                          Immediate="true" />
+
+            <MudTextField Label="Descripción"
+                          @bind-Value="_model.Description"
+                          Lines="3"
+                          MaxLength="1000"
+                          Counter="1000"
+                          Immediate="true"
+                          Class="mt-4" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   OnClick="Submit"
+                   Disabled="@(!_formIsValid || _processing)">
+            @if (_processing)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <MudText Class="ms-2">Guardando...</MudText>
+            }
+            else
+            {
+                <MudText>@(IsEditMode ? "Actualizar" : "Crear")</MudText>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IDialogReference MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public Account? Account { get; set; }
+
+    [Parameter]
+    public bool IsEditMode { get; set; }
+
+    private MudForm _form = null!;
+    private bool _formIsValid;
+    private bool _processing;
+
+    private AccountModel _model = new();
+
+    protected override void OnInitialized()
+    {
+        if (Account != null)
+        {
+            _model.Name = Account.Name;
+            _model.Description = Account.Description;
+        }
+    }
+
+    private void Cancel()
+    {
+        MudDialog?.Close(DialogResult.Cancel());
+    }
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+
+        if (!_formIsValid)
+            return;
+
+        _processing = true;
+
+        try
+        {
+            if (IsEditMode && Account != null)
+            {
+                await AccountService.UpdateAccountAsync(Account.Id, _model.Name, _model.Description);
+            }
+            else
+            {
+                await AccountService.CreateAccountAsync(_model.Name, _model.Description);
+            }
+
+            MudDialog?.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private class AccountModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+    }
+}

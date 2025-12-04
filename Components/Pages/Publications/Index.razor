@@ -1,0 +1,254 @@
+@page "/publications"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Domain.Enums
+@inject IAccountService AccountService
+@inject IBasePostService BasePostService
+@inject NavigationManager Navigation
+
+<PageTitle>Calendario de Publicaciones</PageTitle>
+
+<MudText Typo="Typo.h4" Class="mb-4">Calendario de Publicaciones</MudText>
+
+<MudGrid>
+    <!-- Filtros -->
+    <MudItem xs="12">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudGrid>
+                    <MudItem xs="12" md="4">
+                        <MudSelect T="Guid?"
+                                   Label="Filtrar por Cuenta"
+                                   @bind-Value="_filterAccountId"
+                                   Clearable="true"
+                                   AdornmentIcon="@Icons.Material.Filled.Business"
+                                   Adornment="Adornment.Start">
+                            @foreach (var account in _accounts)
+                            {
+                                <MudSelectItem Value="@((Guid?)account.Id)">@account.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" md="4">
+                        <MudSelect T="BasePostState?"
+                                   Label="Filtrar por Estado"
+                                   @bind-Value="_filterState"
+                                   Clearable="true"
+                                   AdornmentIcon="@Icons.Material.Filled.FilterList"
+                                   Adornment="Adornment.Start">
+                            <MudSelectItem Value="@((BasePostState?)BasePostState.Borrador)">Borrador</MudSelectItem>
+                            <MudSelectItem Value="@((BasePostState?)BasePostState.Planificada)">Planificada</MudSelectItem>
+                            <MudSelectItem Value="@((BasePostState?)BasePostState.AdaptacionPendiente)">Pendiente Adaptación</MudSelectItem>
+                            <MudSelectItem Value="@((BasePostState?)BasePostState.Adaptada)">Adaptada</MudSelectItem>
+                            <MudSelectItem Value="@((BasePostState?)BasePostState.Publicada)">Publicada</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem xs="12" md="4" Class="d-flex align-end">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   Href="/publications/new"
+                                   FullWidth="true">
+                            Nueva Publicación
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <!-- Tabla de Publicaciones -->
+    <MudItem xs="12">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudTable Items="@_filteredPosts"
+                          Dense="false"
+                          Hover="true"
+                          Loading="@_loading"
+                          LoadingProgressColor="Color.Primary"
+                          Breakpoint="Breakpoint.Sm">
+                    <HeaderContent>
+                        <MudTh>Título</MudTh>
+                        <MudTh>Cuenta</MudTh>
+                        <MudTh>Estado</MudTh>
+                        <MudTh>Redes Objetivo</MudTh>
+                        <MudTh>Fecha Creación</MudTh>
+                        <MudTh Style="text-align: right">Acciones</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Título">
+                            <MudText Typo="Typo.body2"><strong>@context.Title</strong></MudText>
+                            @if (!string.IsNullOrEmpty(context.Content))
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    @(context.Content.Length > 50 ? context.Content.Substring(0, 50) + "..." : context.Content)
+                                </MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Cuenta">
+                            @GetAccountName(context.AccountId)
+                        </MudTd>
+                        <MudTd DataLabel="Estado">
+                            <MudChip T="string" Size="Size.Small" Color="@GetStateColor(context.State)">
+                                @GetStateName(context.State)
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Redes">
+                            <div class="d-flex gap-1">
+                                @foreach (var network in context.TargetNetworks)
+                                {
+                                    <MudTooltip Text="@network.NetworkType.ToString()">
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                                            @GetNetworkIcon(network.NetworkType)
+                                        </MudChip>
+                                    </MudTooltip>
+                                }
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="Creación">
+                            @context.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                        </MudTd>
+                        <MudTd DataLabel="Acciones" Style="text-align: right">
+                            <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           title="Ver detalles" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           title="Editar"
+                                           Disabled="@(context.State == BasePostState.Publicada)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           title="Eliminar"
+                                           Disabled="@(context.State == BasePostState.Publicada)" />
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <MudText>No hay publicaciones. <MudLink Href="/publications/new">Crear primera publicación</MudLink></MudText>
+                    </NoRecordsContent>
+                </MudTable>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private List<Account> _accounts = new();
+    private List<BasePost> _posts = new();
+    private List<BasePost> _filteredPosts = new();
+    private Guid? _filterAccountId;
+    private BasePostState? _filterState;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    protected override void OnParametersSet()
+    {
+        FilterPosts();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _accounts = (await AccountService.GetAllAccountsAsync()).ToList();
+
+            // Cargar publicaciones de todas las cuentas
+            _posts = new List<BasePost>();
+            foreach (var account in _accounts.Take(10)) // Limitar para demo
+            {
+                try
+                {
+                    var accountPosts = await BasePostService.GetPostsByAccountAsync(account.Id);
+                    _posts.AddRange(accountPosts);
+                }
+                catch
+                {
+                    // Continuar si falla
+                }
+            }
+
+            FilterPosts();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void FilterPosts()
+    {
+        _filteredPosts = _posts;
+
+        if (_filterAccountId.HasValue)
+        {
+            _filteredPosts = _filteredPosts.Where(p => p.AccountId == _filterAccountId.Value).ToList();
+        }
+
+        if (_filterState.HasValue)
+        {
+            _filteredPosts = _filteredPosts.Where(p => p.State == _filterState.Value).ToList();
+        }
+
+        _filteredPosts = _filteredPosts.OrderByDescending(p => p.CreatedAt).ToList();
+    }
+
+    private string GetAccountName(Guid accountId)
+    {
+        return _accounts.FirstOrDefault(a => a.Id == accountId)?.Name ?? "Desconocida";
+    }
+
+    private Color GetStateColor(BasePostState state)
+    {
+        return state switch
+        {
+            BasePostState.Borrador => Color.Default,
+            BasePostState.Planificada => Color.Info,
+            BasePostState.AdaptacionPendiente => Color.Warning,
+            BasePostState.Adaptada => Color.Primary,
+            BasePostState.ParcialmentePublicada => Color.Warning,
+            BasePostState.Publicada => Color.Success,
+            BasePostState.Cancelada => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetStateName(BasePostState state)
+    {
+        return state switch
+        {
+            BasePostState.Borrador => "Borrador",
+            BasePostState.Planificada => "Planificada",
+            BasePostState.AdaptacionPendiente => "Pendiente",
+            BasePostState.Adaptada => "Adaptada",
+            BasePostState.ParcialmentePublicada => "Parcial",
+            BasePostState.Publicada => "Publicada",
+            BasePostState.Cancelada => "Cancelada",
+            _ => state.ToString()
+        };
+    }
+
+    private string GetNetworkIcon(NetworkType network)
+    {
+        return network switch
+        {
+            NetworkType.Facebook => "FB",
+            NetworkType.Instagram => "IG",
+            NetworkType.TikTok => "TT",
+            NetworkType.X => "X",
+            NetworkType.YouTube => "YT",
+            NetworkType.LinkedIn => "IN",
+            _ => network.ToString().Substring(0, 2)
+        };
+    }
+}
