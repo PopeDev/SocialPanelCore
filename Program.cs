@@ -30,8 +30,7 @@ try
 
     // Add services to the container.
     builder.Services.AddRazorComponents()
-        .AddInteractiveServerComponents()
-        .AddInteractiveWebAssemblyComponents(); // Blazor United/Auto
+        .AddInteractiveServerComponents();
 
     // MudBlazor
     builder.Services.AddMudServices();
@@ -112,7 +111,6 @@ try
     if (app.Environment.IsDevelopment())
     {
         app.UseMigrationsEndPoint();
-        app.UseWebAssemblyDebugging();
     }
     else
     {
@@ -133,8 +131,7 @@ try
 
     app.MapStaticAssets();
     app.MapRazorComponents<App>()
-        .AddInteractiveServerRenderMode()
-        .AddInteractiveWebAssemblyRenderMode();
+        .AddInteractiveServerRenderMode();
 
     // Add additional endpoints required by the Identity /Account Razor components.
     app.MapAdditionalIdentityEndpoints();

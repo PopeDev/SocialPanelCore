@@ -1,7 +1,4 @@
-﻿@using Microsoft.AspNetCore.Components.Endpoints
-@inject IHttpContextAccessor HttpContextAccessor
-
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -18,21 +15,12 @@
     <link rel="stylesheet" href="@Assets["SocialPanelCore.styles.css"]" />
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
-    <HeadOutlet @rendermode="@PageRenderMode" />
+    <HeadOutlet />
 </head>
 
 <body>
-    <Routes @rendermode="@PageRenderMode" />
-    <ReconnectModal />
-
-    <script src="@Assets["_framework/blazor.web.js"]" autostart="false"></script>
-    <script>
-        Blazor.start({
-            webAssembly: {
-                useCache: true
-            }
-        });
-    </script>
+    <Routes @rendermode="RenderModeForPage" />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]" type="module"></script>
     <!-- MudBlazor JS -->
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
@@ -40,9 +28,11 @@
 
 </html>
 
+@inject IHttpContextAccessor HttpContextAccessor
+
 @code {
-    private IComponentRenderMode? PageRenderMode => 
-        HttpContextAccessor.HttpContext?.GetEndpoint()?.Metadata.GetMetadata<ExcludeFromInteractiveRoutingAttribute>() is not null
-            ? null  // SSR mode for Identity pages
-            : InteractiveServer;  // Interactive mode for other pages
+    private IComponentRenderMode? RenderModeForPage =>
+        HttpContextAccessor.HttpContext?.Request.Path.StartsWithSegments("/Account") == true
+            ? null
+            : InteractiveServer;
 }

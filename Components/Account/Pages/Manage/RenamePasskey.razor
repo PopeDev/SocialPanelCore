@@ -4,10 +4,12 @@
 @using SocialPanelCore.Data
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
 @using System.Buffers.Text
 
 @inject UserManager<User> UserManager
 @inject IdentityRedirectManager RedirectManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <EditForm Model="Input" OnValidSubmit="Rename" FormName="rename-passkey" method="post">
     <DataAnnotationsValidator />
@@ -36,7 +38,7 @@
     private UserPasskeyInfo? passkey;
 
     [CascadingParameter]
-    private HttpContext HttpContext { get; set; } = default!;
+    private HttpContext? HttpContext { get; set; }
 
     [Parameter]
     public string? Id { get; set; }
@@ -48,10 +50,11 @@
     {
         Input ??= new();
 
-        user = (await UserManager.GetUserAsync(HttpContext.User))!;
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        user = (await UserManager.GetUserAsync(authState.User))!;
         if (user is null)
         {
-            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext!);
             return;
         }
 
@@ -62,7 +65,7 @@
         }
         catch (FormatException)
         {
-            RedirectManager.RedirectToWithStatus("Account/Manage/Passkeys", "Error: The specified passkey ID had an invalid format.", HttpContext);
+            RedirectManager.RedirectToWithStatus("Account/Manage/Passkeys", "Error: The specified passkey ID had an invalid format.", HttpContext!);
             return;
         }
 

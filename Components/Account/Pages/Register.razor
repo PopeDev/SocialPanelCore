@@ -1,5 +1,5 @@
 @page "/Account/Register"
-@rendermode InteractiveServer
+@layout AccountLayout
 
 @using System.ComponentModel.DataAnnotations
 @using System.Text
@@ -7,6 +7,7 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
 @using SocialPanelCore.Data
+@using SocialPanelCore.Components.Account.Shared
 
 @inject UserManager<User> UserManager
 @inject IUserStore<User> UserStore
@@ -33,45 +34,41 @@
         <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
             <DataAnnotationsValidator />
 
-            <MudTextField @bind-Value="Input.Email"
+            <MudStaticTextField Name="Input.Email"
+                          Value="@Input.Email"
                           Label="Correo electrónico"
                           Variant="Variant.Outlined"
-                          InputType="InputType.Email"
-                          Required="true"
-                          RequiredError="El correo es obligatorio"
-                          Class="mb-4"
                           AutoComplete="username"
-                          Placeholder="correo@ejemplo.com" />
+                          Placeholder="correo@ejemplo.com"
+                          Class="mb-4" />
 
-            <MudTextField @bind-Value="Input.Password"
+            <MudStaticTextField Name="Input.Password"
+                          Value="@Input.Password"
                           Label="Contraseña"
                           Variant="Variant.Outlined"
                           InputType="InputType.Password"
-                          Required="true"
-                          RequiredError="La contraseña es obligatoria"
                           HelperText="Mínimo 6 caracteres"
-                          Class="mb-4"
                           AutoComplete="new-password"
-                          Placeholder="Contraseña" />
+                          Placeholder="Contraseña"
+                          Class="mb-4" />
 
-            <MudTextField @bind-Value="Input.ConfirmPassword"
+            <MudStaticTextField Name="Input.ConfirmPassword"
+                          Value="@Input.ConfirmPassword"
                           Label="Confirmar contraseña"
                           Variant="Variant.Outlined"
                           InputType="InputType.Password"
-                          Required="true"
-                          RequiredError="Debes confirmar la contraseña"
-                          Class="mb-4"
                           AutoComplete="new-password"
-                          Placeholder="Confirmar contraseña" />
+                          Placeholder="Confirmar contraseña"
+                          Class="mb-4" />
 
-            <MudButton ButtonType="ButtonType.Submit"
+            <MudStaticButton ButtonType="ButtonType.Submit"
                        Variant="Variant.Filled"
                        Color="Color.Primary"
                        FullWidth="true"
                        Size="Size.Large"
                        Class="mb-4">
                 Registrarse
-            </MudButton>
+            </MudStaticButton>
         </EditForm>
 
         <MudDivider Class="my-4" />

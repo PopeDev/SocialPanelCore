@@ -1,6 +1,5 @@
 ﻿@using SocialPanelCore.Components.Account.Shared
 @using Microsoft.AspNetCore.Components.Web
-@using Microsoft.AspNetCore.Components.Endpoints
 @inject IHttpContextAccessor HttpContextAccessor
 
 <CascadingValue Value="HttpContextAccessor.HttpContext">
@@ -8,14 +7,7 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
                 <NotAuthorized>
-                    @if (HttpContextAccessor.HttpContext?.GetEndpoint()?.Metadata.GetMetadata<ExcludeFromInteractiveRoutingAttribute>() is not null)
-                    {
-                        HttpContextAccessor.HttpContext.Response.Redirect($"/Account/Login?ReturnUrl={Uri.EscapeDataString(HttpContextAccessor.HttpContext.Request.Path)}");
-                    }
-                    else
-                    {
-                        <RedirectToLogin />
-                    }
+                    <RedirectToLogin />
                 </NotAuthorized>
                 <Authorizing>
                     <p>Autorizando...</p>

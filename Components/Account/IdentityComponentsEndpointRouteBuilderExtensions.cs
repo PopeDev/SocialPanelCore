@@ -41,6 +41,78 @@ namespace Microsoft.AspNetCore.Routing
                 return TypedResults.Challenge(properties, [provider]);
             });
 
+            accountGroup.MapPost("/PerformLogin", async (
+                HttpContext context,
+                [FromServices] SignInManager<User> signInManager,
+                [FromServices] ILogger<User> logger,
+                [FromForm] string? email,
+                [FromForm] string? password,
+                [FromForm] string? rememberMe,
+                [FromForm] string? returnUrl,
+                [FromForm(Name = "Input.Passkey.CredentialJson")] string? passkeyCredentialJson,
+                [FromForm(Name = "Input.Passkey.Error")] string? passkeyError) =>
+            {
+                // Check if this is a passkey login
+                if (!string.IsNullOrEmpty(passkeyCredentialJson) || !string.IsNullOrEmpty(passkeyError))
+                {
+                    if (!string.IsNullOrEmpty(passkeyError))
+                    {
+                        return TypedResults.LocalRedirect($"~/Account/Login?error=PasskeyError&returnUrl={returnUrl}");
+                    }
+
+                    var result = await signInManager.PasskeySignInAsync(passkeyCredentialJson!);
+
+                    if (result.Succeeded)
+                    {
+                        logger.LogInformation("User logged in with passkey.");
+                        return TypedResults.LocalRedirect($"~/{returnUrl ?? ""}");
+                    }
+                    else if (result.RequiresTwoFactor)
+                    {
+                        return TypedResults.LocalRedirect($"~/Account/LoginWith2fa?returnUrl={returnUrl}");
+                    }
+                    else if (result.IsLockedOut)
+                    {
+                        logger.LogWarning("User account locked out.");
+                        return TypedResults.LocalRedirect("~/Account/Lockout");
+                    }
+                    else
+                    {
+                        return TypedResults.LocalRedirect($"~/Account/Login?error=InvalidCredentials&returnUrl={returnUrl}");
+                    }
+                }
+
+                // Password-based login
+                if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+                {
+                    return TypedResults.LocalRedirect($"~/Account/Login?error=InvalidCredentials&returnUrl={returnUrl}");
+                }
+
+                // HTML checkbox sends "on" when checked, null when unchecked
+                bool rememberMeBool = rememberMe == "on" || rememberMe == "true";
+                var passwordResult = await signInManager.PasswordSignInAsync(email, password, rememberMeBool, lockoutOnFailure: false);
+
+                if (passwordResult.Succeeded)
+                {
+                    logger.LogInformation("User {Email} logged in.", email);
+                    return TypedResults.LocalRedirect($"~/{returnUrl ?? ""}");
+                }
+                else if (passwordResult.RequiresTwoFactor)
+                {
+                    return TypedResults.LocalRedirect($"~/Account/LoginWith2fa?returnUrl={returnUrl}&rememberMe={rememberMeBool}");
+                }
+                else if (passwordResult.IsLockedOut)
+                {
+                    logger.LogWarning("User {Email} account locked out.", email);
+                    return TypedResults.LocalRedirect("~/Account/Lockout");
+                }
+                else
+                {
+                    // Redirect back to login with error
+                    return TypedResults.LocalRedirect($"~/Account/Login?error=InvalidCredentials&returnUrl={returnUrl}");
+                }
+            });
+
             accountGroup.MapPost("/Logout", async (
                 ClaimsPrincipal user,
                 [FromServices] SignInManager<User> signInManager,

@@ -1,14 +1,15 @@
 ﻿@page "/Account/Manage/ExternalLogins"
-@rendermode InteractiveServer
 
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
 @using SocialPanelCore.Data
 
 @inject UserManager<User> UserManager
 @inject SignInManager<User> SignInManager
 @inject IUserStore<User> UserStore
 @inject IdentityRedirectManager RedirectManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Manage your external logins</PageTitle>
 
@@ -71,11 +72,11 @@
     private IList<AuthenticationScheme>? otherLogins;
     private bool showRemoveButton;
 
-    [CascadingParameter]
-    private HttpContext HttpContext { get; set; } = default!;
-
     [SupplyParameterFromForm]
     private string? LoginProvider { get; set; }
+
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
 
     [SupplyParameterFromForm]
     private string? ProviderKey { get; set; }
@@ -85,10 +86,11 @@
 
     protected override async Task OnInitializedAsync()
     {
-        user = await UserManager.GetUserAsync(HttpContext.User);
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        user = await UserManager.GetUserAsync(authState.User);
         if (user is null)
         {
-            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext!);
             return;
         }
 

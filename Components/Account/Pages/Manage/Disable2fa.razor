@@ -2,11 +2,13 @@
 @rendermode InteractiveServer
 
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Authorization
 @using SocialPanelCore.Data
 
 @inject UserManager<User> UserManager
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<Disable2fa> Logger
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Disable two-factor authentication (2FA)</PageTitle>
 
@@ -34,18 +36,19 @@
     private User? user;
 
     [CascadingParameter]
-    private HttpContext HttpContext { get; set; } = default!;
+    private HttpContext? HttpContext { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        user = await UserManager.GetUserAsync(HttpContext.User);
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        user = await UserManager.GetUserAsync(authState.User);
         if (user is null)
         {
-            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext!);
             return;
         }
 
-        if (HttpMethods.IsGet(HttpContext.Request.Method) && !await UserManager.GetTwoFactorEnabledAsync(user))
+        if (HttpContext != null && HttpMethods.IsGet(HttpContext.Request.Method) && !await UserManager.GetTwoFactorEnabledAsync(user))
         {
             throw new InvalidOperationException("Cannot disable 2FA for user as it's not currently enabled.");
         }
