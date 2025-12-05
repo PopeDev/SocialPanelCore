@@ -1,36 +1,41 @@
 @page "/Account/AccessDenied"
+@layout AccountLayout
 
 <PageTitle>Acceso Denegado</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
-    <MudPaper Elevation="4" Class="pa-8">
-        <div class="d-flex flex-column align-center">
-            <MudIcon Icon="@Icons.Material.Filled.Block"
-                     Size="Size.Large"
-                     Color="Color.Error"
-                     Class="mb-4" />
+<div class="mud-paper mud-paper-outlined mud-elevation-4 pa-8" style="border-radius: 4px; background-color: var(--mud-palette-surface);">
+    <div class="d-flex flex-column align-center">
+        <span class="mud-icon-root mud-icon-size-large mb-4" style="color: var(--mud-palette-error);">
+            <svg class="mud-icon-root mud-svg-icon" focusable="false" viewBox="0 0 24 24" aria-hidden="true" style="width: 3rem; height: 3rem; fill: currentColor;">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z"></path>
+            </svg>
+        </span>
 
-            <MudText Typo="Typo.h4" Color="Color.Error" Class="mb-2">
-                Acceso Denegado
-            </MudText>
+        <h4 class="mud-typography mud-typography-h4 mb-2" style="color: var(--mud-palette-error);">
+            Acceso Denegado
+        </h4>
 
-            <MudText Typo="Typo.body1" Align="Align.Center" Class="mb-4">
-                No tienes permisos para acceder a este recurso.
-            </MudText>
+        <p class="mud-typography mud-typography-body1 mb-4" style="text-align: center;">
+            No tienes permisos para acceder a este recurso.
+        </p>
 
-            <MudStack Row="true" Spacing="2">
-                <MudButton Href="/"
-                           Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.Home">
-                    Ir al Inicio
-                </MudButton>
-                <MudButton Href="Account/Login"
-                           Variant="Variant.Outlined"
-                           Color="Color.Primary">
-                    Iniciar con otra cuenta
-                </MudButton>
-            </MudStack>
+        <div class="d-flex gap-2">
+            <a href="/"
+               class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple"
+               style="text-decoration: none;">
+                <span class="mud-button-label">Ir al Inicio</span>
+            </a>
+            <a href="Account/Login"
+               class="mud-button-root mud-button mud-button-outlined mud-button-outlined-primary mud-ripple"
+               style="text-decoration: none;">
+                <span class="mud-button-label">Iniciar con otra cuenta</span>
+            </a>
         </div>
-    </MudPaper>
-</MudContainer>
+    </div>
+</div>
+
+<style>
+    .gap-2 {
+        gap: 0.5rem;
+    }
+</style>
