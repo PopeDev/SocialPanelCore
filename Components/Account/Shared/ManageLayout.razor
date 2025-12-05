@@ -1,18 +1,40 @@
 @inherits LayoutComponentBase
 @layout SocialPanelCore.Components.Layout.MainLayout
 
-<MudText Typo="Typo.h4" Class="mb-2">Mi Cuenta</MudText>
-<MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-4">
+<h4 class="mud-typography mud-typography-h4 mb-2">Mi Cuenta</h4>
+<p class="mud-typography mud-typography-subtitle1 mb-4" style="color: var(--mud-palette-text-secondary);">
     Administra tu configuración de cuenta
-</MudText>
+</p>
 
-<MudDivider Class="mb-4" />
+<hr class="mud-divider mud-divider-fullwidth mb-4" />
 
-<MudGrid>
-    <MudItem xs="12" md="3">
+<div class="manage-layout-grid">
+    <div class="manage-nav">
         <ManageNavMenu />
-    </MudItem>
-    <MudItem xs="12" md="9">
+    </div>
+    <div class="manage-content">
         @Body
-    </MudItem>
-</MudGrid>
+    </div>
+</div>
+
+<style>
+    .manage-layout-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    @@media (min-width: 960px) {
+        .manage-layout-grid {
+            grid-template-columns: 250px 1fr;
+        }
+    }
+
+    .manage-nav {
+        padding: 1rem;
+    }
+
+    .manage-content {
+        padding: 1rem;
+    }
+</style>

@@ -1,4 +1,5 @@
 @page "/Account/ResendEmailConfirmation"
+@layout AccountLayout
 
 @using System.ComponentModel.DataAnnotations
 @using System.Text
@@ -6,6 +7,7 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
 @using SocialPanelCore.Data
+@using SocialPanelCore.Components.Account.Shared
 
 @inject UserManager<User> UserManager
 @inject IEmailSender<User> EmailSender
@@ -14,49 +16,98 @@
 
 <PageTitle>Reenviar confirmación de correo</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
-    <MudPaper Elevation="4" Class="pa-8">
-        <div class="d-flex flex-column align-center mb-4">
-            <MudIcon Icon="@Icons.Material.Filled.MailOutline" Size="Size.Large" Color="Color.Info" />
-            <MudText Typo="Typo.h4" Class="mt-2">Reenviar confirmación de correo</MudText>
-            <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center">
-                Ingresa tu correo electrónico para reenviar el enlace de confirmación
-            </MudText>
+<div class="mud-paper mud-paper-outlined mud-elevation-4 pa-8" style="border-radius: 4px; background-color: var(--mud-palette-surface);">
+    <div class="d-flex flex-column align-center mb-4">
+        <span class="mud-icon-root mud-icon-size-large" style="color: var(--mud-palette-info);">
+            <svg class="mud-icon-root mud-svg-icon" focusable="false" viewBox="0 0 24 24" aria-hidden="true" style="width: 3rem; height: 3rem; fill: currentColor;">
+                <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"></path>
+            </svg>
+        </span>
+        <h4 class="mud-typography mud-typography-h4 mt-2">Reenviar confirmación de correo</h4>
+        <p class="mud-typography mud-typography-body1" style="color: var(--mud-palette-text-secondary); text-align: center;">
+            Ingresa tu correo electrónico para reenviar el enlace de confirmación
+        </p>
+    </div>
+
+    <StatusMessage Message="@message" />
+
+    <EditForm Model="Input" FormName="resend-email-confirmation" OnValidSubmit="OnValidSubmitAsync" method="post">
+        <DataAnnotationsValidator />
+
+        <div class="mud-input-control mud-input-control-margin-dense mb-4">
+            <label class="mud-input-label mud-input-label-animated mud-input-label-outlined mud-input-label-inputcontrol" for="email">
+                Correo electrónico
+            </label>
+            <div class="mud-input mud-input-outlined mud-shrink">
+                <InputText @bind-Value="Input.Email"
+                           id="email"
+                           name="Input.Email"
+                           class="mud-input-slot mud-input-root mud-input-root-outlined"
+                           autocomplete="email"
+                           placeholder="correo@ejemplo.com" />
+                <div class="mud-input-outlined-border"></div>
+            </div>
+            <ValidationMessage For="() => Input.Email" class="mud-input-helper-text mud-input-error" />
         </div>
 
-        <StatusMessage Message="@message" />
+        <button type="submit"
+                class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-button-filled-size-large mud-ripple mb-4"
+                style="width: 100%;">
+            <span class="mud-button-label">Reenviar</span>
+        </button>
+    </EditForm>
 
-        <EditForm Model="Input" FormName="resend-email-confirmation" OnValidSubmit="OnValidSubmitAsync" method="post">
-            <DataAnnotationsValidator />
+    <hr class="mud-divider mud-divider-fullwidth my-4" />
 
-            <MudTextField @bind-Value="Input.Email"
-                          Label="Correo electrónico"
-                          Variant="Variant.Outlined"
-                          InputType="InputType.Email"
-                          Required="true"
-                          RequiredError="El correo es obligatorio"
-                          Class="mb-4"
-                          Placeholder="correo@ejemplo.com" />
+    <div class="d-flex justify-center">
+        <a href="Account/Login" class="mud-typography mud-link mud-primary-text mud-link-underline-hover mud-typography-body2">
+            Volver al inicio de sesión
+        </a>
+    </div>
+</div>
 
-            <MudButton ButtonType="ButtonType.Submit"
-                       Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       FullWidth="true"
-                       Size="Size.Large"
-                       Class="mb-4">
-                Reenviar
-            </MudButton>
-        </EditForm>
+<style>
+    .mud-input-slot {
+        width: 100%;
+        padding: 16.5px 14px;
+        border: none;
+        background: transparent;
+        font-size: 1rem;
+        font-family: inherit;
+        outline: none;
+    }
 
-        <MudDivider Class="my-4" />
+    .mud-input-outlined {
+        position: relative;
+        border-radius: 4px;
+    }
 
-        <div class="d-flex justify-center">
-            <MudLink Href="Account/Login" Typo="Typo.body2">
-                Volver al inicio de sesión
-            </MudLink>
-        </div>
-    </MudPaper>
-</MudContainer>
+    .mud-input-outlined-border {
+        position: absolute;
+        inset: 0;
+        border: 1px solid rgba(0, 0, 0, 0.23);
+        border-radius: 4px;
+        pointer-events: none;
+        transition: border-color 0.2s;
+    }
+
+    .mud-input-outlined:focus-within .mud-input-outlined-border {
+        border: 2px solid var(--mud-palette-primary);
+    }
+
+    .mud-input-label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.875rem;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .mud-input-helper-text.mud-input-error {
+        color: var(--mud-palette-error);
+        font-size: 0.75rem;
+        margin-top: 3px;
+    }
+</style>
 
 @code {
     private string? message;

@@ -19,76 +19,146 @@
 
 <PageTitle>Crear Cuenta</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
-    <MudPaper Elevation="4" Class="pa-8">
-        <div class="d-flex flex-column align-center mb-4">
-            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Large" Color="Color.Primary" />
-            <MudText Typo="Typo.h4" Class="mt-2">Crear Cuenta</MudText>
-            <MudText Typo="Typo.subtitle1" Color="Color.Secondary">
-                Regístrate para comenzar
-            </MudText>
+<div class="mud-paper mud-paper-outlined mud-elevation-4 pa-8" style="border-radius: 4px; background-color: var(--mud-palette-surface);">
+    <div class="d-flex flex-column align-center mb-4">
+        <span class="mud-icon-root mud-icon-size-large" style="color: var(--mud-palette-primary);">
+            <svg class="mud-icon-root mud-svg-icon" focusable="false" viewBox="0 0 24 24" aria-hidden="true" style="width: 3rem; height: 3rem; fill: currentColor;">
+                <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
+            </svg>
+        </span>
+        <h4 class="mud-typography mud-typography-h4 mt-2">Crear Cuenta</h4>
+        <p class="mud-typography mud-typography-subtitle1" style="color: var(--mud-palette-text-secondary);">
+            Regístrate para comenzar
+        </p>
+    </div>
+
+    <StatusMessage Message="@Message" />
+
+    <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
+        <DataAnnotationsValidator />
+
+        <div class="mud-input-control mud-input-control-margin-dense mb-4">
+            <label class="mud-input-label mud-input-label-animated mud-input-label-outlined mud-input-label-inputcontrol" for="email">
+                Correo electrónico
+            </label>
+            <div class="mud-input mud-input-outlined mud-shrink">
+                <InputText @bind-Value="Input.Email"
+                           id="email"
+                           name="Input.Email"
+                           class="mud-input-slot mud-input-root mud-input-root-outlined"
+                           autocomplete="username"
+                           placeholder="correo@ejemplo.com" />
+                <div class="mud-input-outlined-border"></div>
+            </div>
+            <ValidationMessage For="() => Input.Email" class="mud-input-helper-text mud-input-error" />
         </div>
 
-        <StatusMessage Message="@Message" />
-
-        <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
-            <DataAnnotationsValidator />
-
-            <MudStaticTextField Name="Input.Email"
-                          Value="@Input.Email"
-                          Label="Correo electrónico"
-                          Variant="Variant.Outlined"
-                          AutoComplete="username"
-                          Placeholder="correo@ejemplo.com"
-                          Class="mb-4" />
-
-            <MudStaticTextField Name="Input.Password"
-                          Value="@Input.Password"
-                          Label="Contraseña"
-                          Variant="Variant.Outlined"
-                          InputType="InputType.Password"
-                          HelperText="Mínimo 6 caracteres"
-                          AutoComplete="new-password"
-                          Placeholder="Contraseña"
-                          Class="mb-4" />
-
-            <MudStaticTextField Name="Input.ConfirmPassword"
-                          Value="@Input.ConfirmPassword"
-                          Label="Confirmar contraseña"
-                          Variant="Variant.Outlined"
-                          InputType="InputType.Password"
-                          AutoComplete="new-password"
-                          Placeholder="Confirmar contraseña"
-                          Class="mb-4" />
-
-            <MudStaticButton ButtonType="ButtonType.Submit"
-                       Variant="Variant.Filled"
-                       Color="Color.Primary"
-                       FullWidth="true"
-                       Size="Size.Large"
-                       Class="mb-4">
-                Registrarse
-            </MudStaticButton>
-        </EditForm>
-
-        <MudDivider Class="my-4" />
-
-        <div class="d-flex justify-center">
-            <MudLink Href="Account/Login" Typo="Typo.body2">
-                ¿Ya tienes cuenta? Inicia sesión
-            </MudLink>
+        <div class="mud-input-control mud-input-control-margin-dense mb-4">
+            <label class="mud-input-label mud-input-label-animated mud-input-label-outlined mud-input-label-inputcontrol" for="password">
+                Contraseña
+            </label>
+            <div class="mud-input mud-input-outlined mud-shrink">
+                <InputText @bind-Value="Input.Password"
+                           id="password"
+                           name="Input.Password"
+                           type="password"
+                           class="mud-input-slot mud-input-root mud-input-root-outlined"
+                           autocomplete="new-password"
+                           placeholder="Contraseña" />
+                <div class="mud-input-outlined-border"></div>
+            </div>
+            <p class="mud-input-helper-text">Mínimo 6 caracteres</p>
+            <ValidationMessage For="() => Input.Password" class="mud-input-helper-text mud-input-error" />
         </div>
 
-        <MudDivider Class="my-4" />
-
-        <div>
-            <MudText Typo="Typo.h6" Align="Align.Center" Class="mb-2">
-                Registrarse con otro servicio
-            </MudText>
-            <ExternalLoginPicker />
+        <div class="mud-input-control mud-input-control-margin-dense mb-4">
+            <label class="mud-input-label mud-input-label-animated mud-input-label-outlined mud-input-label-inputcontrol" for="confirmPassword">
+                Confirmar contraseña
+            </label>
+            <div class="mud-input mud-input-outlined mud-shrink">
+                <InputText @bind-Value="Input.ConfirmPassword"
+                           id="confirmPassword"
+                           name="Input.ConfirmPassword"
+                           type="password"
+                           class="mud-input-slot mud-input-root mud-input-root-outlined"
+                           autocomplete="new-password"
+                           placeholder="Confirmar contraseña" />
+                <div class="mud-input-outlined-border"></div>
+            </div>
+            <ValidationMessage For="() => Input.ConfirmPassword" class="mud-input-helper-text mud-input-error" />
         </div>
-    </MudPaper>
-</MudContainer>
+
+        <button type="submit"
+                class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-button-filled-size-large mud-ripple mb-4"
+                style="width: 100%;">
+            <span class="mud-button-label">Registrarse</span>
+        </button>
+    </EditForm>
+
+    <hr class="mud-divider mud-divider-fullwidth my-4" />
+
+    <div class="d-flex justify-center">
+        <a href="Account/Login" class="mud-typography mud-link mud-primary-text mud-link-underline-hover mud-typography-body2">
+            ¿Ya tienes cuenta? Inicia sesión
+        </a>
+    </div>
+
+    <hr class="mud-divider mud-divider-fullwidth my-4" />
+
+    <div>
+        <h6 class="mud-typography mud-typography-h6" style="text-align: center; margin-bottom: 0.5rem;">
+            Registrarse con otro servicio
+        </h6>
+        <ExternalLoginPicker />
+    </div>
+</div>
+
+<style>
+    .mud-input-slot {
+        width: 100%;
+        padding: 16.5px 14px;
+        border: none;
+        background: transparent;
+        font-size: 1rem;
+        font-family: inherit;
+        outline: none;
+    }
+
+    .mud-input-outlined {
+        position: relative;
+        border-radius: 4px;
+    }
+
+    .mud-input-outlined-border {
+        position: absolute;
+        inset: 0;
+        border: 1px solid rgba(0, 0, 0, 0.23);
+        border-radius: 4px;
+        pointer-events: none;
+        transition: border-color 0.2s;
+    }
+
+    .mud-input-outlined:focus-within .mud-input-outlined-border {
+        border: 2px solid var(--mud-palette-primary);
+    }
+
+    .mud-input-label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.875rem;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .mud-input-helper-text {
+        font-size: 0.75rem;
+        margin-top: 3px;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .mud-input-helper-text.mud-input-error {
+        color: var(--mud-palette-error);
+    }
+</style>
 
 @code {
     private IEnumerable<IdentityError>? identityErrors;

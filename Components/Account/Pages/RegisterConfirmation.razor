@@ -1,9 +1,11 @@
 @page "/Account/RegisterConfirmation"
+@layout AccountLayout
 
 @using System.Text
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
 @using SocialPanelCore.Data
+@using SocialPanelCore.Components.Account.Shared
 
 @inject UserManager<User> UserManager
 @inject IEmailSender<User> EmailSender
@@ -12,43 +14,45 @@
 
 <PageTitle>Confirmación de Registro</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
-    <MudPaper Elevation="4" Class="pa-8">
-        <div class="d-flex flex-column align-center mb-4">
-            <MudIcon Icon="@Icons.Material.Filled.Email" Size="Size.Large" Color="Color.Info" />
-            <MudText Typo="Typo.h4" Class="mt-2">Confirmación de Registro</MudText>
+<div class="mud-paper mud-paper-outlined mud-elevation-4 pa-8" style="border-radius: 4px; background-color: var(--mud-palette-surface);">
+    <div class="d-flex flex-column align-center mb-4">
+        <span class="mud-icon-root mud-icon-size-large" style="color: var(--mud-palette-info);">
+            <svg class="mud-icon-root mud-svg-icon" focusable="false" viewBox="0 0 24 24" aria-hidden="true" style="width: 3rem; height: 3rem; fill: currentColor;">
+                <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"></path>
+            </svg>
+        </span>
+        <h4 class="mud-typography mud-typography-h4 mt-2">Confirmación de Registro</h4>
+    </div>
+
+    <StatusMessage Message="@statusMessage" />
+
+    @if (emailConfirmationLink is not null)
+    {
+        <div class="mud-alert mud-alert-text-info mb-4" style="padding: 1rem; border-radius: 4px; background-color: rgba(33, 150, 243, 0.1); border-left: 4px solid var(--mud-palette-info);">
+            Esta aplicación no tiene configurado un servicio de correo real.
+            Consulta <a href="https://aka.ms/aspaccountconf" target="_blank" class="mud-link mud-primary-text">esta documentación</a>
+            para configurar un servicio de correo real.
         </div>
-
-        <StatusMessage Message="@statusMessage" />
-
-        @if (emailConfirmationLink is not null)
-        {
-            <MudAlert Severity="Severity.Info" Class="mb-4">
-                Esta aplicación no tiene configurado un servicio de correo real.
-                Consulta <MudLink Href="https://aka.ms/aspaccountconf" Target="_blank">esta documentación</MudLink>
-                para configurar un servicio de correo real.
-            </MudAlert>
-            <MudAlert Severity="Severity.Success" Class="mb-4">
-                Normalmente esto se enviaría por correo:
-                <MudLink Href="@emailConfirmationLink">Haz clic aquí para confirmar tu cuenta</MudLink>
-            </MudAlert>
-        }
-        else
-        {
-            <MudAlert Severity="Severity.Success" Class="mb-4">
-                Por favor revisa tu correo electrónico para confirmar tu cuenta.
-            </MudAlert>
-        }
-
-        <MudDivider Class="my-4" />
-
-        <div class="d-flex justify-center">
-            <MudLink Href="Account/Login" Typo="Typo.body2">
-                Ir al inicio de sesión
-            </MudLink>
+        <div class="mud-alert mud-alert-text-success mb-4" style="padding: 1rem; border-radius: 4px; background-color: rgba(76, 175, 80, 0.1); border-left: 4px solid var(--mud-palette-success);">
+            Normalmente esto se enviaría por correo:
+            <a href="@emailConfirmationLink" class="mud-link mud-primary-text">Haz clic aquí para confirmar tu cuenta</a>
         </div>
-    </MudPaper>
-</MudContainer>
+    }
+    else
+    {
+        <div class="mud-alert mud-alert-text-success mb-4" style="padding: 1rem; border-radius: 4px; background-color: rgba(76, 175, 80, 0.1); border-left: 4px solid var(--mud-palette-success);">
+            Por favor revisa tu correo electrónico para confirmar tu cuenta.
+        </div>
+    }
+
+    <hr class="mud-divider mud-divider-fullwidth my-4" />
+
+    <div class="d-flex justify-center">
+        <a href="Account/Login" class="mud-typography mud-link mud-primary-text mud-link-underline-hover mud-typography-body2">
+            Ir al inicio de sesión
+        </a>
+    </div>
+</div>
 
 @code {
     private string? emailConfirmationLink;

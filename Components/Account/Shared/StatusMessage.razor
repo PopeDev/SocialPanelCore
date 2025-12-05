@@ -1,9 +1,13 @@
 @if (!string.IsNullOrEmpty(DisplayMessage))
 {
-    var severity = DisplayMessage.StartsWith("Error") ? Severity.Error : Severity.Success;
-    <MudAlert Severity="@severity" Class="mb-4" ShowCloseIcon="true">
+    var isError = DisplayMessage.StartsWith("Error");
+    var alertClass = isError ? "status-alert-error" : "status-alert-success";
+    var borderColor = isError ? "var(--mud-palette-error)" : "var(--mud-palette-success)";
+    var bgColor = isError ? "rgba(244, 67, 54, 0.1)" : "rgba(76, 175, 80, 0.1)";
+
+    <div class="status-alert @alertClass mb-4" style="padding: 1rem; border-radius: 4px; background-color: @bgColor; border-left: 4px solid @borderColor;">
         @DisplayMessage
-    </MudAlert>
+    </div>
 }
 
 @code {
