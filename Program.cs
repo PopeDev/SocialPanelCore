@@ -36,6 +36,9 @@ try
     // MudBlazor
     builder.Services.AddMudServices();
 
+    // Add HttpContextAccessor for cascading HttpContext in Blazor components
+    builder.Services.AddHttpContextAccessor();
+
     builder.Services.AddCascadingAuthenticationState();
     builder.Services.AddScoped<IdentityRedirectManager>();
     builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
