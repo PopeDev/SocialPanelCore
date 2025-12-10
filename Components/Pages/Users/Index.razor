@@ -6,9 +6,11 @@
 @using SocialPanelCore.Domain.Entities
 @using SocialPanelCore.Domain.Enums
 @using SocialPanelCore.Components.Shared.Dialogs
+@using Microsoft.Extensions.Logging
 @inject IUserService UserService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
+@inject ILogger<Index> Logger
 
 <PageTitle>Gestión de Usuarios</PageTitle>
 
@@ -97,6 +99,11 @@
             _users = (await UserService.GetAllUsersAsync()).ToList();
             FilterUsers();
         }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error al cargar usuarios");
+            Snackbar.Add($"Error al cargar usuarios: {ex.Message}", Severity.Error);
+        }
         finally
         {
             _loading = false;
@@ -107,7 +114,7 @@
     {
         if (string.IsNullOrWhiteSpace(_searchString))
         {
-            _filteredUsers = _users;
+            _filteredUsers = _users.ToList(); // Nueva lista para evitar referencia compartida
         }
         else
         {

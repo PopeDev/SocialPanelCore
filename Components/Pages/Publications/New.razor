@@ -8,6 +8,7 @@
 @inject IBasePostService BasePostService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Nueva Publicación</PageTitle>
 
@@ -263,11 +264,33 @@
 
     private async Task LoadAccounts()
     {
-        _accounts = (await AccountService.GetAllAccountsAsync()).ToList();
-        if (_accounts.Any())
+        try
         {
-            _model.AccountId = _accounts.First().Id;
+            _accounts = (await AccountService.GetAllAccountsAsync()).ToList();
+            if (_accounts.Any())
+            {
+                _model.AccountId = _accounts.First().Id;
+            }
+            else
+            {
+                Snackbar.Add("No hay cuentas disponibles. Cree una cuenta primero.", Severity.Warning);
+            }
         }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar cuentas: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task<Guid?> GetCurrentUserIdAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var claim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (claim != null && Guid.TryParse(claim.Value, out var userId))
+        {
+            return userId;
+        }
+        return null;
     }
 
     private Task OnFilesSelected(InputFileChangeEventArgs e)
@@ -290,17 +313,30 @@
         await _form.Validate();
         if (!_formIsValid) return;
 
+        var selectedNetworks = _selectedNetworks.Where(x => x.Value).Select(x => x.Key).ToList();
+        if (!selectedNetworks.Any())
+        {
+            Snackbar.Add("Debe seleccionar al menos una red social", Severity.Warning);
+            return;
+        }
+
+        if (_model.AccountId == Guid.Empty)
+        {
+            Snackbar.Add("Debe seleccionar una cuenta", Severity.Warning);
+            return;
+        }
+
         _processing = true;
         try
         {
-            var selectedNetworks = _selectedNetworks.Where(x => x.Value).Select(x => x.Key).ToList();
+            var userId = await GetCurrentUserIdAsync();
 
             // Create as draft with a default scheduled date
             var scheduledDate = DateTime.UtcNow.AddDays(1);
 
             await BasePostService.CreatePostAsync(
                 _model.AccountId,
-                null, // createdByUserId
+                userId,
                 _model.Content,
                 scheduledDate,
                 selectedNetworks,
@@ -332,10 +368,17 @@
             return;
         }
 
+        if (_model.AccountId == Guid.Empty)
+        {
+            Snackbar.Add("Debe seleccionar una cuenta", Severity.Warning);
+            return;
+        }
+
         _processing = true;
         try
         {
             var selectedNetworks = _selectedNetworks.Where(x => x.Value).Select(x => x.Key).ToList();
+            var userId = await GetCurrentUserIdAsync();
 
             // Determinar fecha de publicación
             DateTime scheduledDate;
@@ -355,7 +398,7 @@
             // Crear publicación con estado Planificada
             await BasePostService.CreatePostAsync(
                 _model.AccountId,
-                null, // createdByUserId
+                userId,
                 _model.Content,
                 scheduledDate,
                 selectedNetworks,

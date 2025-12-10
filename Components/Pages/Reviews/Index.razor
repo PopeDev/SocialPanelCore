@@ -16,7 +16,7 @@
     <!-- Selector de Cuenta -->
     <MudCard Elevation="2" Class="mb-4">
         <MudCardContent>
-            <MudSelect T="Guid" Label="Cuenta" @bind-Value="_selectedAccountId" AdornmentIcon="@Icons.Material.Filled.Business" Adornment="Adornment.Start">
+            <MudSelect T="Guid" Label="Cuenta" Value="_selectedAccountId" ValueChanged="OnAccountChanged" AdornmentIcon="@Icons.Material.Filled.Business" Adornment="Adornment.Start">
                 @foreach (var account in _accounts)
                 {
                     <MudSelectItem Value="@account.Id">@account.Name</MudSelectItem>
@@ -98,8 +98,9 @@
         }
     }
 
-    protected override async Task OnParametersSetAsync()
+    private async Task OnAccountChanged(Guid accountId)
     {
+        _selectedAccountId = accountId;
         await LoadPendingPosts();
     }
 

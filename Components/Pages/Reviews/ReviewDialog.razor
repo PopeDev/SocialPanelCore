@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @inject IBasePostService BasePostService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
@@ -73,7 +74,8 @@
 
             if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
             {
-                throw new InvalidOperationException("No se pudo obtener el ID del usuario");
+                Snackbar.Add("No se pudo obtener el ID del usuario", Severity.Error);
+                return;
             }
 
             if (IsApproval)
@@ -87,11 +89,9 @@
 
             MudDialog.Close(DialogResult.Ok(true));
         }
-        catch
+        catch (Exception ex)
         {
-            // El error será manejado por el componente padre
-            MudDialog.Close(DialogResult.Cancel());
-            throw;
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
         }
     }
 }
