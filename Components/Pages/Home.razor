@@ -1,4 +1,4 @@
-ï»¿@page "/"
+@page "/"
 @rendermode InteractiveServer
 @using SocialPanelCore.Domain.Interfaces
 @using SocialPanelCore.Domain.Entities
@@ -12,7 +12,7 @@
 <MudText Typo="Typo.h4" Class="mb-4">Dashboard</MudText>
 
 <MudGrid>
-    <!-- Tarjetas de estadÃ­sticas -->
+    <!-- Tarjetas de estadísticas -->
     <MudItem xs="12" sm="6" md="3">
         <MudCard Elevation="2">
             <MudCardContent>
@@ -69,12 +69,12 @@
         </MudCard>
     </MudItem>
 
-    <!-- Acciones rÃ¡pidas -->
+    <!-- Acciones rápidas -->
     <MudItem xs="12" md="6">
         <MudCard Elevation="2">
             <MudCardHeader>
                 <CardHeaderContent>
-                    <MudText Typo="Typo.h6">Acciones RÃ¡pidas</MudText>
+                    <MudText Typo="Typo.h6">Acciones Rápidas</MudText>
                 </CardHeaderContent>
             </MudCardHeader>
             <MudCardContent>
@@ -84,7 +84,7 @@
                                StartIcon="@Icons.Material.Filled.Add"
                                Href="/publications/new"
                                FullWidth="true">
-                        Nueva PublicaciÃ³n
+                        Nueva Publicación
                     </MudButton>
                     <MudButton Variant="Variant.Outlined"
                                Color="Color.Primary"
@@ -147,19 +147,19 @@
                 else
                 {
                     <MudAlert Severity="Severity.Info">
-                        No hay redes sociales configuradas todavÃ­a.
+                        No hay redes sociales configuradas todavía.
                     </MudAlert>
                 }
             </MudCardContent>
         </MudCard>
     </MudItem>
 
-    <!-- Ãšltimas publicaciones -->
+    <!-- Últimas publicaciones -->
     <MudItem xs="12">
         <MudCard Elevation="2">
             <MudCardHeader>
                 <CardHeaderContent>
-                    <MudText Typo="Typo.h6">Ãšltimas Publicaciones</MudText>
+                    <MudText Typo="Typo.h6">Últimas Publicaciones</MudText>
                 </CardHeaderContent>
             </MudCardHeader>
             <MudCardContent>
@@ -167,13 +167,13 @@
                 {
                     <MudTable Items="@_recentPosts" Dense="true" Hover="true">
                         <HeaderContent>
-                            <MudTh>TÃ­tulo</MudTh>
+                            <MudTh>Título</MudTh>
                             <MudTh>Estado</MudTh>
                             <MudTh>Fecha Programada</MudTh>
                             <MudTh>Redes</MudTh>
                         </HeaderContent>
                         <RowTemplate>
-                            <MudTd DataLabel="TÃ­tulo">@context.Title</MudTd>
+                            <MudTd DataLabel="Título">@context.Title</MudTd>
                             <MudTd DataLabel="Estado">
                                 <MudChip T="string" Size="Size.Small" Color="@GetStateColor(context.State)">
                                     @GetStateName(context.State)
@@ -189,7 +189,7 @@
                 else
                 {
                     <MudAlert Severity="Severity.Info">
-                        No hay publicaciones todavÃ­a. <MudLink Href="/publications/new">Crear primera publicaciÃ³n</MudLink>
+                        No hay publicaciones todavía. <MudLink Href="/publications/new">Crear primera publicación</MudLink>
                     </MudAlert>
                 }
             </MudCardContent>
@@ -214,15 +214,15 @@
     {
         try
         {
-            // Cargar estadÃ­sticas de cuentas
+            // Cargar estadísticas de cuentas
             var accounts = await AccountService.GetAllAccountsAsync();
             _totalAccounts = accounts.Count();
 
-            // Cargar estadÃ­sticas de canales - simplificado sin llamar mÃ©todos que no existen
+            // Cargar estadísticas de canales - simplificado sin llamar métodos que no existen
             _totalChannels = 0;
             _channelsByNetwork = new Dictionary<string, (int Total, int Active)>();
 
-            // Sin publicaciones por ahora - se implementarÃ¡n despuÃ©s
+            // Sin publicaciones por ahora - se implementarán después
             _recentPosts = new List<BasePost>();
             _scheduledPosts = 0;
             _publishedThisMonth = 0;

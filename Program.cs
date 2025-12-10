@@ -3,14 +3,15 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using Serilog;
-using SocialPanelCore.Infrastructure.BackgroundServices;
-using SocialPanelCore.Application.Integration;
 using SocialPanelCore.Infrastructure.Services;
 using SocialPanelCore.Components;
 using SocialPanelCore.Components.Account;
 using SocialPanelCore.Domain.Interfaces;
 using SocialPanelCore.Infrastructure.Data;
 using SocialPanelCore.Domain.Entities;
+using SocialPanelCore.Hangfire;
+using Hangfire;
+using Hangfire.PostgreSql;
 
 // Configurar Serilog
 Log.Logger = new LoggerConfiguration()
@@ -82,28 +83,31 @@ try
     // Data Protection API para cifrado de tokens
     builder.Services.AddDataProtection();
 
-    // Servicios de Infrastructure
-    builder.Services.AddScoped<TokenProtectionService>();
-    builder.Services.AddScoped<IMediaStorageService, MediaStorageService>();
-
     // Servicios de Application
-    builder.Services.AddScoped<IUserService, UserService>();
     builder.Services.AddScoped<IAccountService, AccountService>();
-    builder.Services.AddScoped<ISocialChannelConfigService, SocialChannelConfigService>();
-    builder.Services.AddScoped<IBasePostService, BasePostService>();
-    builder.Services.AddScoped<IContentAdaptationService, ContentAdaptationService>();
-    builder.Services.AddScoped<ISocialPublisherService, SocialPublisherService>();
+    // TODO: Implementar servicios restantes cuando sea necesario
+    // builder.Services.AddScoped<IUserService, UserService>();
+    // builder.Services.AddScoped<ISocialChannelConfigService, SocialChannelConfigService>();
+    // builder.Services.AddScoped<IBasePostService, BasePostService>();
+    // builder.Services.AddScoped<IContentAdaptationService, ContentAdaptationService>();
+    // builder.Services.AddScoped<ISocialPublisherService, SocialPublisherService>();
 
-    // OpenRouter Configuration y Client
-    builder.Services.Configure<OpenRouterOptions>(
-        builder.Configuration.GetSection(OpenRouterOptions.SectionName));
+    // Configurar Hangfire con PostgreSQL para trabajos en background
+    builder.Services.AddHangfire(config =>
+    {
+        config.SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UsePostgreSqlStorage(options =>
+                options.UseNpgsqlConnection(connectionString));
+    });
 
-    builder.Services.AddHttpClient<OpenRouterClient>()
-        .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(60));
-
-    // Hosted Services para procesos en background
-    builder.Services.AddHostedService<AdaptationHostedService>();
-    builder.Services.AddHostedService<PublishingHostedService>();
+    // Agregar servidor de Hangfire para procesamiento de trabajos
+    builder.Services.AddHangfireServer(options =>
+    {
+        options.ServerName = "SocialPanelCore-Worker";
+        options.WorkerCount = 5; // Número de workers paralelos
+    });
 
     var app = builder.Build();
 
@@ -129,6 +133,13 @@ try
     // Serilog request logging
     app.UseSerilogRequestLogging();
 
+    // Hangfire Dashboard - Accesible en /hangfire (solo usuarios autenticados)
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = new[] { new HangfireAuthorizationFilter() },
+        DashboardTitle = "SocialPanelCore - Trabajos en Background"
+    });
+
     app.MapStaticAssets();
     app.MapRazorComponents<App>()
         .AddInteractiveServerRenderMode();
@@ -141,23 +152,20 @@ try
     if (!Directory.Exists(logsPath))
         Directory.CreateDirectory(logsPath);
 
-    // Ejecutar seeder de base de datos solo en desarrollo
-    if (app.Environment.IsDevelopment())
-    {
-        using (var scope = app.Services.CreateScope())
-        {
-            try
-            {
-                await DatabaseSeeder.SeedAsync(scope.ServiceProvider);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Error durante el seed de la base de datos");
-            }
-        }
-    }
+    // Configurar trabajos recurrentes de Hangfire
+    // TODO: Descomentar cuando se implementen los servicios
+    // RecurringJob.AddOrUpdate<IContentAdaptationService>(
+    //     "adaptar-contenido-ia",
+    //     service => service.AdaptPendingPostsAsync(),
+    //     "0 */3 * * *"); // Cada 3 horas
+    
+    // RecurringJob.AddOrUpdate<ISocialPublisherService>(
+    //     "publicar-posts-programados",
+    //     service => service.PublishScheduledPostsAsync(),
+    //     "*/5 * * * *"); // Cada 5 minutos
 
     Log.Information("SocialPanelCore application started successfully");
+    Log.Information("Hangfire Dashboard disponible en: /hangfire");
 
     app.Run();
 }

@@ -1,10 +1,10 @@
-锘緻rendermode InteractiveServer
+@rendermode InteractiveServer
 @inject NavigationManager NavigationManager
 
 <MudNavMenu>
     <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
 
-    <MudNavGroup Title="Gesti贸n" Icon="@Icons.Material.Filled.Settings" Expanded="true">
+    <MudNavGroup Title="Gesti髇" Icon="@Icons.Material.Filled.Settings" Expanded="true">
         <MudNavLink Href="/accounts" Icon="@Icons.Material.Filled.Business">Cuentas</MudNavLink>
         <MudNavLink Href="/social-channels" Icon="@Icons.Material.Filled.Share">Redes Sociales</MudNavLink>
 
@@ -15,18 +15,26 @@
 
     <MudNavGroup Title="Publicaciones" Icon="@Icons.Material.Filled.PostAdd" Expanded="true">
         <MudNavLink Href="/publications" Icon="@Icons.Material.Filled.CalendarMonth">Calendario</MudNavLink>
-        <MudNavLink Href="/publications/new" Icon="@Icons.Material.Filled.Add">Nueva Publicaci贸n</MudNavLink>
+        <MudNavLink Href="/publications/new" Icon="@Icons.Material.Filled.Add">Nueva Publicaci髇</MudNavLink>
     </MudNavGroup>
+
+    <MudDivider Class="my-2" />
+
+    <AuthorizeView Roles="Superadministrador">
+        <MudNavLink Href="/hangfire" Icon="@Icons.Material.Filled.WorkHistory" Target="_blank">
+            Trabajos en Background
+        </MudNavLink>
+    </AuthorizeView>
 
     <MudDivider Class="my-2" />
 
     <AuthorizeView>
         <Authorized>
             <MudNavLink Href="/Account/Manage" Icon="@Icons.Material.Filled.AccountCircle">Mi Perfil</MudNavLink>
-            <MudNavLink OnClick="@LogoutClick" Icon="@Icons.Material.Filled.Logout">Cerrar Sesi贸n</MudNavLink>
+            <MudNavLink OnClick="@LogoutClick" Icon="@Icons.Material.Filled.Logout">Cerrar Sesi髇</MudNavLink>
         </Authorized>
         <NotAuthorized>
-            <MudNavLink Href="/Account/Login" Icon="@Icons.Material.Filled.Login">Iniciar Sesi贸n</MudNavLink>
+            <MudNavLink Href="/Account/Login" Icon="@Icons.Material.Filled.Login">Iniciar Sesi髇</MudNavLink>
             <MudNavLink Href="/Account/Register" Icon="@Icons.Material.Filled.PersonAdd">Registrarse</MudNavLink>
         </NotAuthorized>
     </AuthorizeView>
