@@ -32,9 +32,9 @@
         </MudCard>
     </MudItem>
 
-    @if (_selectedAccountId != Guid.Empty && _channels.Any())
+    @if (_selectedAccountId != Guid.Empty)
     {
-        <!-- Tarjetas de Redes Sociales -->
+        <!-- Tarjetas de Redes Sociales - Mostrar siempre todas las redes -->
         @foreach (var network in Enum.GetValues<NetworkType>())
         {
             var channel = _channels.FirstOrDefault(c => c.NetworkType == network);
@@ -112,14 +112,6 @@
                 </MudCard>
             </MudItem>
         }
-    }
-    else if (_selectedAccountId != Guid.Empty)
-    {
-        <MudItem xs="12">
-            <MudAlert Severity="Severity.Info">
-                No hay redes sociales configuradas para esta cuenta. Haga clic en "Configurar OAuth" para comenzar.
-            </MudAlert>
-        </MudItem>
     }
     else
     {

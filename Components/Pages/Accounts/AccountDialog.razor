@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using SocialPanelCore.Domain.Entities
 @inject IAccountService AccountService
+@inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
@@ -80,6 +81,7 @@
             return;
 
         _processing = true;
+        StateHasChanged();
 
         try
         {
@@ -94,9 +96,14 @@
 
             MudDialog?.Close(DialogResult.Ok(true));
         }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al guardar: {ex.Message}", Severity.Error);
+        }
         finally
         {
             _processing = false;
+            StateHasChanged();
         }
     }
 

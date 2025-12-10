@@ -91,6 +91,11 @@
             _accounts = (await AccountService.GetAllAccountsAsync()).ToList();
             FilterAccounts();
         }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error al cargar cuentas");
+            Snackbar.Add($"Error al cargar cuentas: {ex.Message}", Severity.Error);
+        }
         finally
         {
             _loading = false;
@@ -101,7 +106,7 @@
     {
         if (string.IsNullOrWhiteSpace(_searchString))
         {
-            _filteredAccounts = _accounts;
+            _filteredAccounts = _accounts.ToList(); // Nueva lista para evitar referencia compartida
         }
         else
         {
