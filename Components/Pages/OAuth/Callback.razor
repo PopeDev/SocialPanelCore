@@ -1,0 +1,214 @@
+@page "/oauth/callback"
+@rendermode InteractiveServer
+@using System.Text
+@using SocialPanelCore.Domain.Enums
+@using SocialPanelCore.Domain.Interfaces
+@inject IOAuthService OAuthService
+@inject ISocialChannelConfigService SocialChannelConfigService
+@inject NavigationManager NavigationManager
+@inject ILogger<Callback> Logger
+
+<PageTitle>Autorizacion OAuth</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
+    <MudCard Elevation="3">
+        <MudCardContent>
+            @if (_isProcessing)
+            {
+                <div class="d-flex flex-column align-center pa-8">
+                    <MudProgressCircular Indeterminate="true" Size="Size.Large" Color="Color.Primary" />
+                    <MudText Typo="Typo.h6" Class="mt-4">Procesando autorizacion...</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                        Por favor espera mientras completamos la configuracion.
+                    </MudText>
+                </div>
+            }
+            else if (_success)
+            {
+                <div class="d-flex flex-column align-center pa-8">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Class="mt-4">Autorizacion Exitosa</MudText>
+                    <MudText Typo="Typo.body1" Class="mt-2">
+                        @GetNetworkName() ha sido conectado correctamente.
+                    </MudText>
+                    @if (!string.IsNullOrEmpty(_handle))
+                    {
+                        <MudChip T="string" Color="Color.Primary" Class="mt-2">@@@_handle</MudChip>
+                    }
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-4">
+                        Puedes cerrar esta ventana y volver a la aplicacion.
+                    </MudText>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Class="mt-4"
+                               OnClick="GoToSocialChannels">
+                        Ir a Configuracion de Redes
+                    </MudButton>
+                </div>
+            }
+            else
+            {
+                <div class="d-flex flex-column align-center pa-8">
+                    <MudIcon Icon="@Icons.Material.Filled.Error" Color="Color.Error" Size="Size.Large" />
+                    <MudText Typo="Typo.h5" Class="mt-4">Error en Autorizacion</MudText>
+                    <MudText Typo="Typo.body1" Class="mt-2" Color="Color.Error">
+                        @_errorMessage
+                    </MudText>
+                    @if (!string.IsNullOrEmpty(_errorDescription))
+                    {
+                        <MudAlert Severity="Severity.Error" Class="mt-4" Dense="true">
+                            @_errorDescription
+                        </MudAlert>
+                    }
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Class="mt-4"
+                               OnClick="GoToSocialChannels">
+                        Volver a Configuracion
+                    </MudButton>
+                </div>
+            }
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    [SupplyParameterFromQuery(Name = "code")]
+    public string? Code { get; set; }
+
+    [SupplyParameterFromQuery(Name = "state")]
+    public string? State { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error_description")]
+    public string? ErrorDescription { get; set; }
+
+    private bool _isProcessing = true;
+    private bool _success = false;
+    private string? _errorMessage;
+    private string? _errorDescription;
+    private NetworkType _networkType;
+    private string? _handle;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ProcessCallback();
+    }
+
+    private async Task ProcessCallback()
+    {
+        try
+        {
+            // Verificar si hay error
+            if (!string.IsNullOrEmpty(Error))
+            {
+                _errorMessage = $"Error de autorizacion: {Error}";
+                _errorDescription = ErrorDescription;
+                _isProcessing = false;
+                return;
+            }
+
+            // Verificar parametros requeridos
+            if (string.IsNullOrEmpty(Code) || string.IsNullOrEmpty(State))
+            {
+                _errorMessage = "Parametros de autorizacion invalidos";
+                _isProcessing = false;
+                return;
+            }
+
+            // Decodificar state
+            var stateBytes = Convert.FromBase64String(State);
+            var stateString = Encoding.UTF8.GetString(stateBytes);
+            var stateParts = stateString.Split('|');
+
+            if (stateParts.Length < 2)
+            {
+                _errorMessage = "Estado de autorizacion invalido";
+                _isProcessing = false;
+                return;
+            }
+
+            var accountId = Guid.Parse(stateParts[0]);
+            _networkType = Enum.Parse<NetworkType>(stateParts[1]);
+
+            Logger.LogInformation("Procesando callback OAuth para {NetworkType}, cuenta {AccountId}",
+                _networkType, accountId);
+
+            // Intercambiar codigo por tokens
+            var baseUrl = NavigationManager.BaseUri.TrimEnd('/');
+            var redirectUri = $"{baseUrl}/oauth/callback";
+
+            var tokenResult = await OAuthService.ExchangeCodeForTokensAsync(_networkType, Code, redirectUri);
+
+            if (!tokenResult.Success)
+            {
+                _errorMessage = tokenResult.Error ?? "Error al obtener tokens";
+                _errorDescription = tokenResult.ErrorDescription;
+                _isProcessing = false;
+                return;
+            }
+
+            // Obtener info del usuario
+            OAuthUserInfo? userInfo = null;
+            if (!string.IsNullOrEmpty(tokenResult.AccessToken))
+            {
+                userInfo = await OAuthService.GetUserInfoAsync(_networkType, tokenResult.AccessToken);
+            }
+
+            _handle = userInfo?.Username ?? userInfo?.DisplayName;
+
+            // Guardar configuracion
+            var existingConfig = await SocialChannelConfigService.GetChannelConfigByAccountAndNetworkAsync(accountId, _networkType);
+
+            if (existingConfig != null)
+            {
+                await SocialChannelConfigService.UpdateTokensAsync(
+                    existingConfig.Id,
+                    tokenResult.AccessToken!,
+                    tokenResult.RefreshToken,
+                    tokenResult.ExpiresAt);
+            }
+            else
+            {
+                await SocialChannelConfigService.CreateChannelConfigAsync(
+                    accountId,
+                    _networkType,
+                    tokenResult.AccessToken!,
+                    tokenResult.RefreshToken,
+                    tokenResult.ExpiresAt,
+                    _handle);
+            }
+
+            Logger.LogInformation("OAuth completado exitosamente para {NetworkType}", _networkType);
+
+            _success = true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error procesando callback OAuth");
+            _errorMessage = "Error inesperado al procesar la autorizacion";
+            _errorDescription = ex.Message;
+        }
+        finally
+        {
+            _isProcessing = false;
+        }
+    }
+
+    private string GetNetworkName() => _networkType switch
+    {
+        NetworkType.Facebook => "Facebook",
+        NetworkType.Instagram => "Instagram",
+        NetworkType.LinkedIn => "LinkedIn",
+        NetworkType.YouTube => "YouTube",
+        NetworkType.TikTok => "TikTok",
+        _ => _networkType.ToString()
+    };
+
+    private void GoToSocialChannels()
+    {
+        NavigationManager.NavigateTo("/social-channels");
+    }
+}
