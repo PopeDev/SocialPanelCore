@@ -83,14 +83,17 @@ try
     // Data Protection API para cifrado de tokens
     builder.Services.AddDataProtection();
 
+    // HttpClient para llamadas a APIs externas (OAuth, etc.)
+    builder.Services.AddHttpClient();
+
     // Servicios de Application
     builder.Services.AddScoped<IAccountService, AccountService>();
     builder.Services.AddScoped<IUserService, UserService>();
     builder.Services.AddScoped<ISocialChannelConfigService, SocialChannelConfigService>();
     builder.Services.AddScoped<IBasePostService, BasePostService>();
     builder.Services.AddScoped<IContentAdaptationService, ContentAdaptationService>();
-    builder.Services.AddScoped<SocialChannelConfigService>(); // Necesario para SocialPublisherService
     builder.Services.AddScoped<ISocialPublisherService, SocialPublisherService>();
+    builder.Services.AddScoped<IOAuthService, OAuthService>();
 
     // Configurar Hangfire con PostgreSQL para trabajos en background
     builder.Services.AddHangfire(config =>

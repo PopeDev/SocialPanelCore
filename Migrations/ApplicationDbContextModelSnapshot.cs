@@ -344,11 +344,31 @@ namespace SocialPanelCore.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("AccessTokenSecret")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("AccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ApiKey")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ApiSecret")
+                        .HasColumnType("text");
+
+                    b.Property<int>("AuthMethod")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExternalChannelId")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ExternalUserId")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Handle")
                         .HasMaxLength(200)

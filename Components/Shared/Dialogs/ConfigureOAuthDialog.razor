@@ -1,0 +1,264 @@
+@using SocialPanelCore.Domain.Enums
+@using SocialPanelCore.Domain.Interfaces
+@inject IOAuthService OAuthService
+@inject ISocialChannelConfigService SocialChannelConfigService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@GetNetworkIcon()" Class="mr-2" />
+            Conectar @GetNetworkName()
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (!_authStarted)
+        {
+            <MudText Typo="Typo.body1" Class="mb-4">
+                Para conectar @GetNetworkName(), necesitas autorizar la aplicacion a acceder a tu cuenta.
+            </MudText>
+
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                <MudText Typo="Typo.body2">
+                    Al hacer clic en "Iniciar Autorizacion", se abrira una ventana donde podras
+                    iniciar sesion en @GetNetworkName() y autorizar los permisos necesarios.
+                </MudText>
+            </MudAlert>
+
+            <MudText Typo="Typo.body2" Class="mb-2">
+                <strong>Permisos requeridos:</strong>
+            </MudText>
+            <MudList T="string" Dense="true">
+                @foreach (var permission in GetRequiredPermissions())
+                {
+                    <MudListItem T="string" Icon="@Icons.Material.Filled.Check" IconColor="Color.Success">
+                        @permission
+                    </MudListItem>
+                }
+            </MudList>
+
+            <MudDivider Class="my-4" />
+
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Tambien puedes introducir un Access Token directamente si ya lo tienes.
+            </MudText>
+
+            <MudExpansionPanels Class="mt-2">
+                <MudExpansionPanel Text="Introducir Token Manualmente">
+                    <MudTextField @bind-Value="_manualAccessToken"
+                                  Label="Access Token"
+                                  Variant="Variant.Outlined"
+                                  Lines="3"
+                                  HelperText="Introduce el access token obtenido manualmente"
+                                  Class="mb-3" />
+
+                    <MudTextField @bind-Value="_manualRefreshToken"
+                                  Label="Refresh Token (opcional)"
+                                  Variant="Variant.Outlined"
+                                  HelperText="Si tienes un refresh token"
+                                  Class="mb-3" />
+
+                    <MudTextField @bind-Value="_manualHandle"
+                                  Label="Handle/Username"
+                                  Variant="Variant.Outlined"
+                                  Placeholder="@nombreusuario"
+                                  HelperText="Tu nombre de usuario en la red" />
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-4">
+                <MudText Typo="Typo.body2">
+                    Se ha abierto una ventana para autorizar la aplicacion.
+                    Por favor completa el proceso de autorizacion.
+                </MudText>
+            </MudAlert>
+
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-4" />
+
+            <MudText Typo="Typo.body2" Align="Align.Center">
+                Esperando autorizacion...
+            </MudText>
+        }
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_isLoading">Cancelar</MudButton>
+
+        @if (!string.IsNullOrWhiteSpace(_manualAccessToken))
+        {
+            <MudButton Color="Color.Secondary"
+                       Variant="Variant.Filled"
+                       OnClick="SaveManualToken"
+                       Disabled="_isLoading">
+                Guardar Token Manual
+            </MudButton>
+        }
+
+        @if (!_authStarted)
+        {
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       OnClick="StartOAuth"
+                       Disabled="_isLoading">
+                Iniciar Autorizacion
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter]
+    public Guid AccountId { get; set; }
+
+    [Parameter]
+    public NetworkType NetworkType { get; set; }
+
+    [Parameter]
+    public Guid? ExistingConfigId { get; set; }
+
+    private bool _authStarted = false;
+    private bool _isLoading = false;
+    private string? _errorMessage;
+    private string _manualAccessToken = string.Empty;
+    private string _manualRefreshToken = string.Empty;
+    private string _manualHandle = string.Empty;
+
+    private string GetNetworkName() => NetworkType switch
+    {
+        NetworkType.Facebook => "Facebook",
+        NetworkType.Instagram => "Instagram",
+        NetworkType.LinkedIn => "LinkedIn",
+        NetworkType.YouTube => "YouTube",
+        NetworkType.TikTok => "TikTok",
+        _ => NetworkType.ToString()
+    };
+
+    private string GetNetworkIcon() => NetworkType switch
+    {
+        NetworkType.Facebook => Icons.Custom.Brands.Facebook,
+        NetworkType.Instagram => Icons.Custom.Brands.Instagram,
+        NetworkType.LinkedIn => Icons.Custom.Brands.LinkedIn,
+        NetworkType.YouTube => Icons.Custom.Brands.YouTube,
+        NetworkType.TikTok => Icons.Custom.Brands.TikTok,
+        _ => Icons.Material.Filled.Share
+    };
+
+    private List<string> GetRequiredPermissions() => NetworkType switch
+    {
+        NetworkType.Facebook => new List<string>
+        {
+            "Publicar en tu pagina",
+            "Ver informacion de tu pagina",
+            "Gestionar publicaciones"
+        },
+        NetworkType.Instagram => new List<string>
+        {
+            "Publicar contenido",
+            "Ver informacion del perfil",
+            "Gestionar comentarios"
+        },
+        NetworkType.LinkedIn => new List<string>
+        {
+            "Publicar actualizaciones",
+            "Ver perfil basico"
+        },
+        NetworkType.YouTube => new List<string>
+        {
+            "Subir videos",
+            "Gestionar tu canal"
+        },
+        NetworkType.TikTok => new List<string>
+        {
+            "Subir videos",
+            "Publicar contenido"
+        },
+        _ => new List<string>()
+    };
+
+    private async Task StartOAuth()
+    {
+        try
+        {
+            _isLoading = true;
+            _errorMessage = null;
+
+            var baseUrl = NavigationManager.BaseUri.TrimEnd('/');
+            var redirectUri = $"{baseUrl}/oauth/callback";
+
+            var authUrl = OAuthService.GetAuthorizationUrl(NetworkType, AccountId, redirectUri);
+
+            // Abrir ventana de autorizacion
+            await JS.InvokeVoidAsync("open", authUrl, "_blank", "width=600,height=700");
+
+            _authStarted = true;
+
+            Snackbar.Add("Se ha abierto la ventana de autorizacion. Completa el proceso y vuelve aqui.", Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error iniciando OAuth: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SaveManualToken()
+    {
+        if (string.IsNullOrWhiteSpace(_manualAccessToken))
+        {
+            _errorMessage = "El Access Token es requerido";
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (ExistingConfigId.HasValue)
+            {
+                await SocialChannelConfigService.UpdateTokensAsync(
+                    ExistingConfigId.Value,
+                    _manualAccessToken.Trim(),
+                    string.IsNullOrWhiteSpace(_manualRefreshToken) ? null : _manualRefreshToken.Trim(),
+                    null);
+            }
+            else
+            {
+                await SocialChannelConfigService.CreateChannelConfigAsync(
+                    AccountId,
+                    NetworkType,
+                    _manualAccessToken.Trim(),
+                    string.IsNullOrWhiteSpace(_manualRefreshToken) ? null : _manualRefreshToken.Trim(),
+                    null,
+                    string.IsNullOrWhiteSpace(_manualHandle) ? null : _manualHandle.Trim().TrimStart('@'));
+            }
+
+            Snackbar.Add($"Token de {GetNetworkName()} guardado correctamente", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error al guardar: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Close(DialogResult.Cancel());
+}

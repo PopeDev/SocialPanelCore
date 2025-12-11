@@ -7,11 +7,12 @@
 @using SocialPanelCore.Components.Shared.Dialogs
 @inject IAccountService AccountService
 @inject ISocialChannelConfigService SocialChannelConfigService
+@inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
-<PageTitle>Configuración de Redes Sociales</PageTitle>
+<PageTitle>Configuracion de Redes Sociales</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4">Configuración de Redes Sociales</MudText>
+<MudText Typo="Typo.h4" Class="mb-4">Configuracion de Redes Sociales</MudText>
 
 <MudGrid>
     <!-- Selector de Cuenta -->
@@ -34,19 +35,23 @@
 
     @if (_selectedAccountId != Guid.Empty)
     {
-        <!-- Tarjetas de Redes Sociales - Mostrar siempre todas las redes -->
+        <!-- Tarjetas de Redes Sociales -->
         @foreach (var network in Enum.GetValues<NetworkType>())
         {
             var channel = _channels.FirstOrDefault(c => c.NetworkType == network);
             var isConfigured = channel != null;
             var isHealthy = channel?.HealthStatus == HealthStatus.OK;
+            var authMethod = GetAuthMethodForNetwork(network);
 
             <MudItem xs="12" sm="6" md="4">
                 <MudCard Elevation="2">
                     <MudCardHeader>
                         <CardHeaderContent>
                             <div class="d-flex justify-space-between align-center">
-                                <MudText Typo="Typo.h6">@GetNetworkName(network)</MudText>
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="@GetNetworkIcon(network)" Color="@GetNetworkColor(network)" Class="mr-2" />
+                                    <MudText Typo="Typo.h6">@GetNetworkName(network)</MudText>
+                                </div>
                                 @if (isConfigured)
                                 {
                                     <MudIcon Icon="@(isHealthy ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Error)"
@@ -59,23 +64,48 @@
                         @if (isConfigured && channel != null)
                         {
                             <MudText Typo="Typo.body2" Class="mb-2">
-                                <strong>Estado:</strong> @GetHealthStatusName(channel.HealthStatus)
+                                <strong>Estado:</strong>
+                                <MudChip T="string" Size="Size.Small"
+                                         Color="@(isHealthy ? Color.Success : Color.Error)"
+                                         Class="ml-2">
+                                    @GetHealthStatusName(channel.HealthStatus)
+                                </MudChip>
                             </MudText>
+
+                            <MudText Typo="Typo.body2" Class="mb-2">
+                                <strong>Metodo:</strong> @GetAuthMethodName(channel.AuthMethod)
+                            </MudText>
+
                             @if (!string.IsNullOrEmpty(channel.Handle))
                             {
                                 <MudText Typo="Typo.body2" Class="mb-2">
-                                    <strong>Handle:</strong> @channel.Handle
+                                    <strong>Handle:</strong> @@@channel.Handle
                                 </MudText>
                             }
+
                             <MudText Typo="Typo.body2" Class="mb-2">
-                                <strong>Habilitado:</strong> @(channel.IsEnabled ? "Sí" : "No")
+                                <strong>Habilitado:</strong>
+                                <MudSwitch T="bool" Value="@channel.IsEnabled"
+                                           ValueChanged="@((bool v) => ToggleChannel(channel))"
+                                           Color="Color.Primary"
+                                           Size="Size.Small" />
                             </MudText>
+
                             @if (channel.TokenExpiresAt.HasValue)
                             {
                                 var daysToExpire = (channel.TokenExpiresAt.Value - DateTime.UtcNow).Days;
-                                <MudText Typo="Typo.body2" Color="@(daysToExpire < 7 ? Color.Warning : Color.Default)">
-                                    <strong>Token expira:</strong> en @daysToExpire días
-                                </MudText>
+                                <MudAlert Severity="@(daysToExpire < 7 ? Severity.Warning : Severity.Info)"
+                                          Dense="true"
+                                          Class="mt-2">
+                                    Token expira en @daysToExpire dias
+                                </MudAlert>
+                            }
+
+                            @if (!string.IsNullOrEmpty(channel.LastErrorMessage))
+                            {
+                                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">
+                                    @channel.LastErrorMessage
+                                </MudAlert>
                             }
                         }
                         else
@@ -83,6 +113,9 @@
                             <MudAlert Severity="Severity.Info" Dense="true">
                                 No configurado
                             </MudAlert>
+                            <MudText Typo="Typo.caption" Class="mt-2">
+                                Configura mediante @GetAuthMethodName(authMethod)
+                            </MudText>
                         }
                     </MudCardContent>
                     <MudCardActions>
@@ -90,13 +123,15 @@
                         {
                             <MudButton Size="Size.Small"
                                        Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Settings"
                                        OnClick="@(() => ConfigureNetwork(network, channel))">
                                 Reconfigurar
                             </MudButton>
                             <MudButton Size="Size.Small"
-                                       Color="@(channel.IsEnabled ? Color.Default : Color.Success)"
-                                       OnClick="@(() => ToggleChannel(channel))">
-                                @(channel.IsEnabled ? "Deshabilitar" : "Habilitar")
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       OnClick="@(() => DeleteChannel(channel))">
+                                Eliminar
                             </MudButton>
                         }
                         else
@@ -104,8 +139,9 @@
                             <MudButton Size="Size.Small"
                                        Variant="Variant.Filled"
                                        Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Link"
                                        OnClick="@(() => ConfigureNetwork(network, null))">
-                                Configurar OAuth
+                                @(authMethod == AuthMethod.OAuth ? "Conectar OAuth" : "Configurar API")
                             </MudButton>
                         }
                     </MudCardActions>
@@ -152,7 +188,6 @@
     private async Task LoadChannels()
     {
         if (_selectedAccountId == Guid.Empty) return;
-
         _channels = (await SocialChannelConfigService.GetChannelConfigsByAccountAsync(_selectedAccountId)).ToList();
     }
 
@@ -163,12 +198,12 @@
             if (channel.IsEnabled)
             {
                 await SocialChannelConfigService.DisableChannelAsync(channel.Id);
-                Snackbar.Add($"Canal deshabilitado exitosamente", Severity.Success);
+                Snackbar.Add($"Canal deshabilitado", Severity.Success);
             }
             else
             {
                 await SocialChannelConfigService.EnableChannelAsync(channel.Id);
-                Snackbar.Add($"Canal habilitado exitosamente", Severity.Success);
+                Snackbar.Add($"Canal habilitado", Severity.Success);
             }
             await LoadChannels();
         }
@@ -178,34 +213,144 @@
         }
     }
 
-    private void ConfigureNetwork(NetworkType network, SocialChannelConfig? existing)
+    private async Task ConfigureNetwork(NetworkType network, SocialChannelConfig? existing)
     {
-        Snackbar.Add($"OAuth para {GetNetworkName(network)} - Implementación pendiente", Severity.Info);
-        // TODO: Implementar flujo OAuth real
-        // Por ahora solo mostramos mensaje informativo
+        var authMethod = GetAuthMethodForNetwork(network);
+
+        DialogResult? result;
+
+        if (authMethod == AuthMethod.ApiKey)
+        {
+            // Usar dialogo de API Key (X/Twitter)
+            var parameters = new DialogParameters<ConfigureXCredentialsDialog>
+            {
+                { x => x.AccountId, _selectedAccountId },
+                { x => x.ExistingConfigId, existing?.Id }
+            };
+
+            var options = new DialogOptions
+            {
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true,
+                CloseButton = true
+            };
+
+            var dialog = await DialogService.ShowAsync<ConfigureXCredentialsDialog>(
+                $"Configurar {GetNetworkName(network)}",
+                parameters,
+                options);
+
+            result = await dialog.Result;
+        }
+        else
+        {
+            // Usar dialogo OAuth
+            var parameters = new DialogParameters<ConfigureOAuthDialog>
+            {
+                { x => x.AccountId, _selectedAccountId },
+                { x => x.NetworkType, network },
+                { x => x.ExistingConfigId, existing?.Id }
+            };
+
+            var options = new DialogOptions
+            {
+                MaxWidth = MaxWidth.Small,
+                FullWidth = true,
+                CloseButton = true
+            };
+
+            var dialog = await DialogService.ShowAsync<ConfigureOAuthDialog>(
+                $"Conectar {GetNetworkName(network)}",
+                parameters,
+                options);
+
+            result = await dialog.Result;
+        }
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadChannels();
+        }
     }
 
-    private string GetNetworkName(NetworkType network)
+    private async Task DeleteChannel(SocialChannelConfig channel)
     {
-        return network switch
+        var parameters = new DialogParameters<ConfirmDialog>
         {
-            NetworkType.Facebook => "Facebook",
-            NetworkType.Instagram => "Instagram",
-            NetworkType.TikTok => "TikTok",
-            NetworkType.X => "X (Twitter)",
-            NetworkType.YouTube => "YouTube",
-            NetworkType.LinkedIn => "LinkedIn",
-            _ => network.ToString()
+            { x => x.ContentText, $"¿Estas seguro de eliminar la configuracion de {GetNetworkName(channel.NetworkType)}?" },
+            { x => x.ButtonText, "Eliminar" },
+            { x => x.Color, Color.Error }
         };
+
+        var dialog = await DialogService.ShowAsync<ConfirmDialog>("Confirmar eliminacion", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            try
+            {
+                await SocialChannelConfigService.DeleteChannelAsync(channel.Id);
+                Snackbar.Add("Configuracion eliminada", Severity.Success);
+                await LoadChannels();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
     }
 
-    private string GetHealthStatusName(HealthStatus status)
+    private AuthMethod GetAuthMethodForNetwork(NetworkType network) => network switch
     {
-        return status switch
-        {
-            HealthStatus.OK => "Conectado",
-            HealthStatus.KO => "Error de conexión",
-            _ => status.ToString()
-        };
-    }
+        NetworkType.X => AuthMethod.ApiKey,
+        // Telegram tambien usaria ApiKey cuando se agregue
+        _ => AuthMethod.OAuth
+    };
+
+    private string GetNetworkName(NetworkType network) => network switch
+    {
+        NetworkType.Facebook => "Facebook",
+        NetworkType.Instagram => "Instagram",
+        NetworkType.TikTok => "TikTok",
+        NetworkType.X => "X (Twitter)",
+        NetworkType.YouTube => "YouTube",
+        NetworkType.LinkedIn => "LinkedIn",
+        _ => network.ToString()
+    };
+
+    private string GetNetworkIcon(NetworkType network) => network switch
+    {
+        NetworkType.Facebook => Icons.Custom.Brands.Facebook,
+        NetworkType.Instagram => Icons.Custom.Brands.Instagram,
+        NetworkType.TikTok => Icons.Custom.Brands.TikTok,
+        NetworkType.X => Icons.Custom.Brands.Twitter,
+        NetworkType.YouTube => Icons.Custom.Brands.YouTube,
+        NetworkType.LinkedIn => Icons.Custom.Brands.LinkedIn,
+        _ => Icons.Material.Filled.Share
+    };
+
+    private Color GetNetworkColor(NetworkType network) => network switch
+    {
+        NetworkType.Facebook => Color.Primary,
+        NetworkType.Instagram => Color.Secondary,
+        NetworkType.TikTok => Color.Dark,
+        NetworkType.X => Color.Dark,
+        NetworkType.YouTube => Color.Error,
+        NetworkType.LinkedIn => Color.Info,
+        _ => Color.Default
+    };
+
+    private string GetHealthStatusName(HealthStatus status) => status switch
+    {
+        HealthStatus.OK => "Conectado",
+        HealthStatus.KO => "Error",
+        _ => status.ToString()
+    };
+
+    private string GetAuthMethodName(AuthMethod method) => method switch
+    {
+        AuthMethod.OAuth => "OAuth",
+        AuthMethod.ApiKey => "API Key",
+        _ => method.ToString()
+    };
 }
