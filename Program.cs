@@ -85,12 +85,12 @@ try
 
     // Servicios de Application
     builder.Services.AddScoped<IAccountService, AccountService>();
-    // TODO: Implementar servicios restantes cuando sea necesario
-    // builder.Services.AddScoped<IUserService, UserService>();
-    // builder.Services.AddScoped<ISocialChannelConfigService, SocialChannelConfigService>();
-    // builder.Services.AddScoped<IBasePostService, BasePostService>();
-    // builder.Services.AddScoped<IContentAdaptationService, ContentAdaptationService>();
-    // builder.Services.AddScoped<ISocialPublisherService, SocialPublisherService>();
+    builder.Services.AddScoped<IUserService, UserService>();
+    builder.Services.AddScoped<ISocialChannelConfigService, SocialChannelConfigService>();
+    builder.Services.AddScoped<IBasePostService, BasePostService>();
+    builder.Services.AddScoped<IContentAdaptationService, ContentAdaptationService>();
+    builder.Services.AddScoped<SocialChannelConfigService>(); // Necesario para SocialPublisherService
+    builder.Services.AddScoped<ISocialPublisherService, SocialPublisherService>();
 
     // Configurar Hangfire con PostgreSQL para trabajos en background
     builder.Services.AddHangfire(config =>
@@ -153,16 +153,15 @@ try
         Directory.CreateDirectory(logsPath);
 
     // Configurar trabajos recurrentes de Hangfire
-    // TODO: Descomentar cuando se implementen los servicios
-    // RecurringJob.AddOrUpdate<IContentAdaptationService>(
-    //     "adaptar-contenido-ia",
-    //     service => service.AdaptPendingPostsAsync(),
-    //     "0 */3 * * *"); // Cada 3 horas
-    
-    // RecurringJob.AddOrUpdate<ISocialPublisherService>(
-    //     "publicar-posts-programados",
-    //     service => service.PublishScheduledPostsAsync(),
-    //     "*/5 * * * *"); // Cada 5 minutos
+    RecurringJob.AddOrUpdate<IContentAdaptationService>(
+        "adaptar-contenido-ia",
+        service => service.AdaptPendingPostsAsync(),
+        "0 */3 * * *"); // Cada 3 horas
+
+    RecurringJob.AddOrUpdate<ISocialPublisherService>(
+        "publicar-posts-programados",
+        service => service.PublishScheduledPostsAsync(),
+        "*/5 * * * *"); // Cada 5 minutos
 
     Log.Information("SocialPanelCore application started successfully");
     Log.Information("Hangfire Dashboard disponible en: /hangfire");
