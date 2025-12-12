@@ -62,6 +62,14 @@ public class SocialChannelConfig
     public string? ExternalUserId { get; set; }
 
     public bool IsEnabled { get; set; }
+
+    /// <summary>
+    /// Indica si esta red social permite publicar con medios (imágenes/videos).
+    /// Ejemplo: X/Twitter puede tener coste adicional por medios, entonces AllowMedia = false.
+    /// Instagram normalmente requiere medios, entonces AllowMedia = true.
+    /// </summary>
+    public bool AllowMedia { get; set; } = true;
+
     public HealthStatus HealthStatus { get; set; }
     public DateTime? LastHealthCheck { get; set; }
     public string? LastErrorMessage { get; set; }
