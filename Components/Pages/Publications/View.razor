@@ -1,0 +1,412 @@
+@page "/publications/view/{Id:guid}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Domain.Enums
+@inject IBasePostService BasePostService
+@inject IAccountService AccountService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Ver Publicación</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (_post == null)
+{
+    <MudAlert Severity="Severity.Error">
+        Publicación no encontrada
+    </MudAlert>
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/publications" Class="mt-4">
+        Volver al listado
+    </MudButton>
+}
+else
+{
+    <MudGrid>
+        <!-- Cabecera -->
+        <MudItem xs="12">
+            <div class="d-flex justify-space-between align-center mb-4">
+                <div>
+                    <MudText Typo="Typo.h4">@_post.Title</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Creada el @_post.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                    </MudText>
+                </div>
+                <div>
+                    <MudChip T="string" Color="@GetStateColor(_post.State)" Size="Size.Large">
+                        @GetStateName(_post.State)
+                    </MudChip>
+                </div>
+            </div>
+        </MudItem>
+
+        <!-- Información Principal -->
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Contenido Original</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.body1" Style="white-space: pre-wrap;">@_post.Content</MudText>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Redes Sociales Objetivo -->
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Redes Sociales Objetivo</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <thead>
+                            <tr>
+                                <th>Red Social</th>
+                                <th>Optimización IA</th>
+                                <th>Incluir Medios</th>
+                                <th>Estado Adaptación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var network in _post.TargetNetworks)
+                            {
+                                var adapted = _post.AdaptedVersions?.FirstOrDefault(a => a.NetworkType == network.NetworkType);
+                                <tr>
+                                    <td>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                            @GetNetworkName(network.NetworkType)
+                                        </MudChip>
+                                    </td>
+                                    <td>
+                                        @if (network.UseAiOptimization)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small" />
+                                            <span>Sí</span>
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Close" Color="Color.Default" Size="Size.Small" />
+                                            <span>No (contenido original)</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (network.IncludeMedia)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Image" Color="Color.Info" Size="Size.Small" />
+                                            <span>Sí</span>
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.HideImage" Color="Color.Default" Size="Size.Small" />
+                                            <span>No</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (adapted != null)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="@GetAdaptedStateColor(adapted.State)">
+                                                @GetAdaptedStateName(adapted.State)
+                                            </MudChip>
+                                        }
+                                        else if (!network.UseAiOptimization)
+                                        {
+                                            <MudText Typo="Typo.caption">N/A (sin IA)</MudText>
+                                        }
+                                        else
+                                        {
+                                            <MudText Typo="Typo.caption">Pendiente</MudText>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Versiones Adaptadas -->
+            @if (_post.AdaptedVersions?.Any() == true)
+            {
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Contenido Adaptado por Red</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudExpansionPanels MultiExpansion="true">
+                            @foreach (var adapted in _post.AdaptedVersions.OrderBy(a => a.NetworkType))
+                            {
+                                <MudExpansionPanel>
+                                    <TitleContent>
+                                        <div class="d-flex align-center">
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="mr-2">
+                                                @GetNetworkName(adapted.NetworkType)
+                                            </MudChip>
+                                            <MudChip T="string" Size="Size.Small" Color="@GetAdaptedStateColor(adapted.State)">
+                                                @GetAdaptedStateName(adapted.State)
+                                            </MudChip>
+                                            <MudText Typo="Typo.caption" Class="ml-2">
+                                                (@adapted.CharacterCount caracteres)
+                                            </MudText>
+                                        </div>
+                                    </TitleContent>
+                                    <ChildContent>
+                                        <MudText Typo="Typo.body2" Style="white-space: pre-wrap;">
+                                            @adapted.AdaptedContent
+                                        </MudText>
+                                        @if (adapted.PublishedAt.HasValue)
+                                        {
+                                            <MudDivider Class="my-2" />
+                                            <MudText Typo="Typo.caption" Color="Color.Success">
+                                                Publicado: @adapted.PublishedAt.Value.ToString("dd/MM/yyyy HH:mm")
+                                            </MudText>
+                                            @if (!string.IsNullOrEmpty(adapted.ExternalPostId))
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    ID externo: @adapted.ExternalPostId
+                                                </MudText>
+                                            }
+                                        }
+                                        @if (!string.IsNullOrEmpty(adapted.LastError))
+                                        {
+                                            <MudDivider Class="my-2" />
+                                            <MudAlert Severity="Severity.Error" Dense="true">
+                                                Error: @adapted.LastError
+                                            </MudAlert>
+                                        }
+                                    </ChildContent>
+                                </MudExpansionPanel>
+                            }
+                        </MudExpansionPanels>
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudItem>
+
+        <!-- Panel Lateral -->
+        <MudItem xs="12" md="4">
+            <!-- Información de Cuenta -->
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Información</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudList T="string" Dense="true">
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.Business">
+                            <div class="d-flex flex-column">
+                                <MudText Typo="Typo.caption">Cuenta</MudText>
+                                <MudText Typo="Typo.body2">@_post.Account?.Name</MudText>
+                            </div>
+                        </MudListItem>
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.Schedule">
+                            <div class="d-flex flex-column">
+                                <MudText Typo="Typo.caption">Programada para</MudText>
+                                <MudText Typo="Typo.body2">@_post.ScheduledAtUtc.ToString("dd/MM/yyyy HH:mm") UTC</MudText>
+                            </div>
+                        </MudListItem>
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.AutoAwesome">
+                            <div class="d-flex flex-column">
+                                <MudText Typo="Typo.caption">Optimización IA Global</MudText>
+                                <MudText Typo="Typo.body2">
+                                    @(_post.AiOptimizationEnabled ? "Activada" : "Desactivada")
+                                </MudText>
+                            </div>
+                        </MudListItem>
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.PlayArrow">
+                            <div class="d-flex flex-column">
+                                <MudText Typo="Typo.caption">Modo de Publicación</MudText>
+                                <MudText Typo="Typo.body2">
+                                    @(_post.PublishMode == PublishMode.Immediate ? "Inmediata" : "Programada")
+                                </MudText>
+                            </div>
+                        </MudListItem>
+                        @if (_post.PublishedAt.HasValue)
+                        {
+                            <MudListItem T="string" Icon="@Icons.Material.Filled.CheckCircle">
+                                <div class="d-flex flex-column">
+                                    <MudText Typo="Typo.caption">Publicada</MudText>
+                                    <MudText Typo="Typo.body2">@_post.PublishedAt.Value.ToString("dd/MM/yyyy HH:mm")</MudText>
+                                </div>
+                            </MudListItem>
+                        }
+                    </MudList>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Medios -->
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Medios Adjuntos</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    @if (_post.Media?.Any() == true)
+                    {
+                        <MudGrid>
+                            @foreach (var media in _post.Media.OrderBy(m => m.SortOrder))
+                            {
+                                <MudItem xs="6">
+                                    <MudCard>
+                                        <MudCardMedia Image="@GetMediaUrl(media)" Height="100" />
+                                        <MudCardContent Class="pa-2">
+                                            <MudText Typo="Typo.caption">@media.OriginalFileName</MudText>
+                                        </MudCardContent>
+                                    </MudCard>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            No hay medios adjuntos
+                        </MudText>
+                    }
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Acciones -->
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        @if (_post.State != BasePostState.Publicada)
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.Edit"
+                                       Href="@($"/publications/edit/{_post.Id}")">
+                                Editar
+                            </MudButton>
+                        }
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Default"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.ArrowBack"
+                                   Href="/publications">
+                            Volver al Listado
+                        </MudButton>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private BasePost? _post;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPost();
+    }
+
+    private async Task LoadPost()
+    {
+        _loading = true;
+        try
+        {
+            _post = await BasePostService.GetPostByIdAsync(Id);
+            if (_post == null)
+            {
+                Snackbar.Add("Publicación no encontrada", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar la publicación: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetMediaUrl(PostMedia media)
+    {
+        return $"/uploads/{media.RelativePath}";
+    }
+
+    private Color GetStateColor(BasePostState state)
+    {
+        return state switch
+        {
+            BasePostState.Borrador => Color.Default,
+            BasePostState.Planificada => Color.Info,
+            BasePostState.AdaptacionPendiente => Color.Warning,
+            BasePostState.Adaptada => Color.Primary,
+            BasePostState.ParcialmentePublicada => Color.Warning,
+            BasePostState.Publicada => Color.Success,
+            BasePostState.Cancelada => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetStateName(BasePostState state)
+    {
+        return state switch
+        {
+            BasePostState.Borrador => "Borrador",
+            BasePostState.Planificada => "Planificada",
+            BasePostState.AdaptacionPendiente => "Pendiente Adaptación",
+            BasePostState.Adaptada => "Adaptada",
+            BasePostState.ParcialmentePublicada => "Parcialmente Publicada",
+            BasePostState.Publicada => "Publicada",
+            BasePostState.Cancelada => "Cancelada",
+            _ => state.ToString()
+        };
+    }
+
+    private Color GetAdaptedStateColor(AdaptedPostState state)
+    {
+        return state switch
+        {
+            AdaptedPostState.Pending => Color.Warning,
+            AdaptedPostState.Ready => Color.Info,
+            AdaptedPostState.Published => Color.Success,
+            AdaptedPostState.Failed => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetAdaptedStateName(AdaptedPostState state)
+    {
+        return state switch
+        {
+            AdaptedPostState.Pending => "Pendiente",
+            AdaptedPostState.Ready => "Lista",
+            AdaptedPostState.Published => "Publicada",
+            AdaptedPostState.Failed => "Fallida",
+            _ => state.ToString()
+        };
+    }
+
+    private string GetNetworkName(NetworkType network)
+    {
+        return network switch
+        {
+            NetworkType.Facebook => "Facebook",
+            NetworkType.Instagram => "Instagram",
+            NetworkType.TikTok => "TikTok",
+            NetworkType.X => "X (Twitter)",
+            NetworkType.YouTube => "YouTube",
+            NetworkType.LinkedIn => "LinkedIn",
+            _ => network.ToString()
+        };
+    }
+}
