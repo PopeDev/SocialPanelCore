@@ -17,6 +17,7 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
     public DbSet<BasePost> BasePosts => Set<BasePost>();
     public DbSet<PostTargetNetwork> PostTargetNetworks => Set<PostTargetNetwork>();
     public DbSet<AdaptedPost> AdaptedPosts => Set<AdaptedPost>();
+    public DbSet<PostMedia> PostMedia => Set<PostMedia>();
     public DbSet<UserAccountAccess> UserAccountAccess => Set<UserAccountAccess>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -105,6 +106,37 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
                 .WithMany(a => a.UserAccess)
                 .HasForeignKey(e => e.AccountId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ========== CONFIGURACIÓN DE PostMedia ==========
+        builder.Entity<PostMedia>(entity =>
+        {
+            entity.HasKey(pm => pm.Id);
+
+            entity.Property(pm => pm.OriginalFileName)
+                .IsRequired()
+                .HasMaxLength(255);
+
+            entity.Property(pm => pm.StoredFileName)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(pm => pm.RelativePath)
+                .IsRequired()
+                .HasMaxLength(1000);
+
+            entity.Property(pm => pm.ContentType)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            // Relación con BasePost
+            entity.HasOne(pm => pm.BasePost)
+                .WithMany(bp => bp.Media)
+                .HasForeignKey(pm => pm.BasePostId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Índice para búsqueda por post
+            entity.HasIndex(pm => pm.BasePostId);
         });
     }
 }
