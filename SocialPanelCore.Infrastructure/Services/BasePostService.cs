@@ -48,6 +48,8 @@ public class BasePostService : IBasePostService
             .Include(p => p.TargetNetworks)
             .Include(p => p.Account)
             .Include(p => p.CreatedByUser)
+            .Include(p => p.AdaptedVersions)
+            .Include(p => p.Media)
             .FirstOrDefaultAsync(p => p.Id == id);
     }
 
@@ -205,5 +207,38 @@ public class BasePostService : IBasePostService
             return ContentType.Story;
 
         return ContentType.FeedPost;
+    }
+
+    public async Task UpdateNetworkConfigsAsync(Guid postId, List<NetworkConfigUpdate> configs)
+    {
+        var post = await _context.BasePosts
+            .Include(p => p.TargetNetworks)
+            .FirstOrDefaultAsync(p => p.Id == postId)
+            ?? throw new InvalidOperationException($"Post no encontrado: {postId}");
+
+        if (post.State == BasePostState.Publicada)
+            throw new InvalidOperationException("No se puede modificar un post ya publicado");
+
+        foreach (var config in configs)
+        {
+            var network = post.TargetNetworks.FirstOrDefault(tn => tn.Id == config.NetworkId);
+            if (network != null)
+            {
+                network.UseAiOptimization = config.UseAiOptimization;
+                network.IncludeMedia = config.IncludeMedia;
+            }
+        }
+
+        post.UpdatedAt = DateTime.UtcNow;
+
+        // Si se cambió la configuración de AI y el post ya estaba adaptado, volver a pendiente
+        if (post.State == BasePostState.Adaptada)
+        {
+            post.State = BasePostState.AdaptacionPendiente;
+            _logger.LogInformation("Post {PostId} vuelve a AdaptacionPendiente por cambio de configuración", postId);
+        }
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Configuración de redes actualizada para post {PostId}", postId);
     }
 }

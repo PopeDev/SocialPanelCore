@@ -1,0 +1,477 @@
+@page "/publications/edit/{Id:guid}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Web
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Domain.Enums
+@inject IBasePostService BasePostService
+@inject IAccountService AccountService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Editar Publicación</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+}
+else if (_post == null)
+{
+    <MudAlert Severity="Severity.Error">
+        Publicación no encontrada
+    </MudAlert>
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="/publications" Class="mt-4">
+        Volver al listado
+    </MudButton>
+}
+else if (_post.State == BasePostState.Publicada)
+{
+    <MudAlert Severity="Severity.Warning">
+        No se puede editar una publicación ya publicada
+    </MudAlert>
+    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@($"/publications/view/{Id}")" Class="mt-4">
+        Ver publicación
+    </MudButton>
+}
+else
+{
+    <MudText Typo="Typo.h4" Class="mb-4">Editar Publicación</MudText>
+
+    <MudForm @ref="_form" @bind-IsValid="@_formIsValid">
+        <MudGrid>
+            <!-- Información Básica -->
+            <MudItem xs="12" md="8">
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Información Básica</MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudChip T="string" Color="@GetStateColor(_post.State)" Size="Size.Small">
+                                @GetStateName(_post.State)
+                            </MudChip>
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudTextField Label="Cuenta"
+                                      Value="@_post.Account?.Name"
+                                      ReadOnly="true"
+                                      Disabled="true"
+                                      Variant="Variant.Outlined"
+                                      AdornmentIcon="@Icons.Material.Filled.Business"
+                                      Adornment="Adornment.Start" />
+
+                        <MudTextField Label="Título"
+                                      @bind-Value="_model.Title"
+                                      Required="true"
+                                      RequiredError="El título es obligatorio"
+                                      MaxLength="200"
+                                      Counter="200"
+                                      Immediate="true"
+                                      Class="mt-4" />
+
+                        <MudTextField Label="Contenido Original"
+                                      @bind-Value="_model.Content"
+                                      Required="true"
+                                      RequiredError="El contenido es obligatorio"
+                                      Lines="6"
+                                      MaxLength="5000"
+                                      Counter="5000"
+                                      Immediate="true"
+                                      Class="mt-4" />
+
+                        <MudAlert Severity="Severity.Info" Class="mt-4" Dense="true">
+                            @if (_post.State == BasePostState.Adaptada)
+                            {
+                                <span>Al modificar el contenido, las versiones adaptadas se regenerarán automáticamente.</span>
+                            }
+                            else
+                            {
+                                <span>El contenido será adaptado para cada red social según la configuración de IA.</span>
+                            }
+                        </MudAlert>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Programación -->
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Programación</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudDatePicker Label="Fecha de Publicación"
+                                       @bind-Date="_model.ScheduledDate"
+                                       MinDate="DateTime.Today"
+                                       Required="true" />
+
+                        <MudTimePicker Label="Hora de Publicación"
+                                       @bind-Time="_model.ScheduledTime"
+                                       Required="true"
+                                       Class="mt-4" />
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Redes Sociales -->
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Configuración por Red Social</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <!-- Checkbox Global de AI -->
+                        <MudCheckBox T="bool"
+                                     Value="_model.AiOptimizationEnabled"
+                                     ValueChanged="@OnGlobalAiChanged"
+                                     Label="Optimizar contenido con IA (global)"
+                                     Color="Color.Primary" />
+
+                        <MudDivider Class="my-4" />
+
+                        <MudText Typo="Typo.subtitle2" Class="mb-2">Configuración individual por red:</MudText>
+
+                        <MudSimpleTable Dense="true" Hover="true">
+                            <thead>
+                                <tr>
+                                    <th>Red Social</th>
+                                    <th>Usar IA</th>
+                                    <th>Incluir Medios</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var networkConfig in _networkConfigs)
+                                {
+                                    <tr>
+                                        <td>
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">
+                                                @GetNetworkName(networkConfig.NetworkType)
+                                            </MudChip>
+                                        </td>
+                                        <td>
+                                            <MudCheckBox T="bool"
+                                                         Value="@networkConfig.UseAiOptimization"
+                                                         ValueChanged="@((bool val) => OnNetworkAiChanged(networkConfig, val))"
+                                                         Color="Color.Secondary"
+                                                         Dense="true" />
+                                        </td>
+                                        <td>
+                                            <MudCheckBox T="bool"
+                                                         @bind-Value="@networkConfig.IncludeMedia"
+                                                         Color="Color.Info"
+                                                         Dense="true"
+                                                         Disabled="@(!HasMedia)" />
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+
+                        @if (!HasMedia)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                                * La publicación no tiene medios adjuntos, la opción "Incluir Medios" está deshabilitada.
+                            </MudText>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Panel Lateral -->
+            <MudItem xs="12" md="4">
+                <!-- Medios -->
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Medios Adjuntos</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (_post.Media?.Any() == true)
+                        {
+                            <MudGrid>
+                                @foreach (var media in _post.Media.OrderBy(m => m.SortOrder))
+                                {
+                                    <MudItem xs="6">
+                                        <MudCard>
+                                            <MudCardMedia Image="@GetMediaUrl(media)" Height="80" />
+                                            <MudCardContent Class="pa-1">
+                                                <MudText Typo="Typo.caption" Class="text-truncate">
+                                                    @media.OriginalFileName
+                                                </MudText>
+                                            </MudCardContent>
+                                        </MudCard>
+                                    </MudItem>
+                                }
+                            </MudGrid>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                                Para modificar los medios, cree una nueva publicación.
+                            </MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                No hay medios adjuntos
+                            </MudText>
+                        }
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Previsualización -->
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Previsualización</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText Typo="Typo.body2" Class="mb-2"><strong>Título:</strong></MudText>
+                        <MudText Typo="Typo.body2" Color="@(_model.Title?.Length > 0 ? Color.Default : Color.Secondary)">
+                            @(_model.Title?.Length > 0 ? _model.Title : "Sin título")
+                        </MudText>
+
+                        <MudDivider Class="my-3" />
+
+                        <MudText Typo="Typo.body2" Class="mb-2"><strong>Contenido:</strong></MudText>
+                        <MudText Typo="Typo.body2"
+                                 Color="@(_model.Content?.Length > 0 ? Color.Default : Color.Secondary)"
+                                 Style="max-height: 150px; overflow-y: auto; white-space: pre-wrap;">
+                            @(_model.Content?.Length > 0 ? _model.Content : "Sin contenido")
+                        </MudText>
+
+                        <MudDivider Class="my-3" />
+
+                        <MudText Typo="Typo.body2" Class="mb-2"><strong>Programada para:</strong></MudText>
+                        <MudText Typo="Typo.body2">
+                            @if (_model.ScheduledDate.HasValue && _model.ScheduledTime.HasValue)
+                            {
+                                @((_model.ScheduledDate.Value.Date + _model.ScheduledTime.Value).ToString("dd/MM/yyyy HH:mm"))
+                            }
+                            else
+                            {
+                                <span class="mud-text-secondary">No definida</span>
+                            }
+                        </MudText>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Acciones -->
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <MudStack Spacing="2">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.Save"
+                                       OnClick="SaveChanges"
+                                       Disabled="@(!_formIsValid || _saving)">
+                                @if (_saving)
+                                {
+                                    <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                                    <MudText Class="ms-2">Guardando...</MudText>
+                                }
+                                else
+                                {
+                                    <span>Guardar Cambios</span>
+                                }
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Default"
+                                       FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.Cancel"
+                                       Href="@($"/publications/view/{Id}")"
+                                       Disabled="@_saving">
+                                Cancelar
+                            </MudButton>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    </MudForm>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private MudForm _form = null!;
+    private bool _formIsValid;
+    private bool _loading = true;
+    private bool _saving;
+
+    private BasePost? _post;
+    private EditModel _model = new();
+    private List<NetworkConfigModel> _networkConfigs = new();
+
+    private bool HasMedia => _post?.Media?.Any() == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPost();
+    }
+
+    private async Task LoadPost()
+    {
+        _loading = true;
+        try
+        {
+            _post = await BasePostService.GetPostByIdAsync(Id);
+            if (_post != null)
+            {
+                // Cargar modelo de edición
+                _model = new EditModel
+                {
+                    Title = _post.Title ?? string.Empty,
+                    Content = _post.Content,
+                    ScheduledDate = _post.ScheduledAtUtc.Date,
+                    ScheduledTime = _post.ScheduledAtUtc.TimeOfDay,
+                    AiOptimizationEnabled = _post.AiOptimizationEnabled
+                };
+
+                // Cargar configuración de redes
+                _networkConfigs = _post.TargetNetworks.Select(tn => new NetworkConfigModel
+                {
+                    Id = tn.Id,
+                    NetworkType = tn.NetworkType,
+                    UseAiOptimization = tn.UseAiOptimization,
+                    IncludeMedia = tn.IncludeMedia
+                }).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al cargar la publicación: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnGlobalAiChanged(bool value)
+    {
+        _model.AiOptimizationEnabled = value;
+        // Actualizar todos los checkboxes individuales
+        foreach (var config in _networkConfigs)
+        {
+            config.UseAiOptimization = value;
+        }
+    }
+
+    private void OnNetworkAiChanged(NetworkConfigModel config, bool value)
+    {
+        config.UseAiOptimization = value;
+        // Actualizar el global si todos están iguales
+        _model.AiOptimizationEnabled = _networkConfigs.All(c => c.UseAiOptimization);
+    }
+
+    private async Task SaveChanges()
+    {
+        await _form.Validate();
+        if (!_formIsValid) return;
+
+        _saving = true;
+        try
+        {
+            // Calcular fecha programada
+            var scheduledDate = _model.ScheduledDate!.Value.Date + _model.ScheduledTime!.Value;
+
+            // Actualizar post base
+            await BasePostService.UpdatePostAsync(
+                Id,
+                _model.Content,
+                _model.Title,
+                scheduledDate
+            );
+
+            // Actualizar configuración de redes
+            var networkUpdates = _networkConfigs.Select(nc => new NetworkConfigUpdate
+            {
+                NetworkId = nc.Id,
+                UseAiOptimization = nc.UseAiOptimization,
+                IncludeMedia = nc.IncludeMedia
+            }).ToList();
+
+            await BasePostService.UpdateNetworkConfigsAsync(Id, networkUpdates);
+
+            Snackbar.Add("Publicación actualizada exitosamente", Severity.Success);
+            Navigation.NavigateTo($"/publications/view/{Id}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al guardar: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private string GetMediaUrl(PostMedia media)
+    {
+        return $"/uploads/{media.RelativePath}";
+    }
+
+    private Color GetStateColor(BasePostState state)
+    {
+        return state switch
+        {
+            BasePostState.Borrador => Color.Default,
+            BasePostState.Planificada => Color.Info,
+            BasePostState.AdaptacionPendiente => Color.Warning,
+            BasePostState.Adaptada => Color.Primary,
+            BasePostState.ParcialmentePublicada => Color.Warning,
+            BasePostState.Publicada => Color.Success,
+            BasePostState.Cancelada => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    private string GetStateName(BasePostState state)
+    {
+        return state switch
+        {
+            BasePostState.Borrador => "Borrador",
+            BasePostState.Planificada => "Planificada",
+            BasePostState.AdaptacionPendiente => "Pendiente Adaptación",
+            BasePostState.Adaptada => "Adaptada",
+            BasePostState.ParcialmentePublicada => "Parcialmente Publicada",
+            BasePostState.Publicada => "Publicada",
+            BasePostState.Cancelada => "Cancelada",
+            _ => state.ToString()
+        };
+    }
+
+    private string GetNetworkName(NetworkType network)
+    {
+        return network switch
+        {
+            NetworkType.Facebook => "Facebook",
+            NetworkType.Instagram => "Instagram",
+            NetworkType.TikTok => "TikTok",
+            NetworkType.X => "X (Twitter)",
+            NetworkType.YouTube => "YouTube",
+            NetworkType.LinkedIn => "LinkedIn",
+            _ => network.ToString()
+        };
+    }
+
+    private class EditModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public DateTime? ScheduledDate { get; set; }
+        public TimeSpan? ScheduledTime { get; set; }
+        public bool AiOptimizationEnabled { get; set; } = true;
+    }
+
+    private class NetworkConfigModel
+    {
+        public Guid Id { get; set; }
+        public NetworkType NetworkType { get; set; }
+        public bool UseAiOptimization { get; set; }
+        public bool IncludeMedia { get; set; }
+    }
+}
