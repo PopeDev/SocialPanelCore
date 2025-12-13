@@ -4,7 +4,13 @@ namespace SocialPanelCore.Domain.Interfaces;
 
 /// <summary>
 /// Servicio para manejar flujos OAuth con redes sociales.
-/// Soporta PKCE para proveedores que lo requieren (X/Twitter).
+/// Proveedores soportados:
+/// - Facebook (Meta Graph API v18.0)
+/// - Instagram (via Meta Graph API)
+/// - X/Twitter (OAuth 2.0 con PKCE obligatorio)
+/// - LinkedIn (OAuth 2.0 con OpenID Connect)
+/// - TikTok (Login Kit v2 con PKCE obligatorio)
+/// - YouTube (Google OAuth 2.0)
 /// </summary>
 public interface IOAuthService
 {

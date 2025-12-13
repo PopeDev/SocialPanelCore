@@ -1,0 +1,347 @@
+@using SocialPanelCore.Domain.Enums
+@using SocialPanelCore.Domain.Entities
+
+<MudCard Elevation="2" Class="@($"social-card {GetCardClass()}")">
+    <MudCardHeader>
+        <CardHeaderContent>
+            <div class="d-flex justify-space-between align-center">
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@GetNetworkIcon()" Color="@GetNetworkColor()" Class="mr-2" Size="Size.Large" />
+                    <div>
+                        <MudText Typo="Typo.h6">@GetNetworkName()</MudText>
+                        @if (Channel != null && !string.IsNullOrEmpty(Channel.Handle))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@@@Channel.Handle</MudText>
+                        }
+                    </div>
+                </div>
+                @if (Channel != null)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@GetConnectionStatusColor()" Variant="Variant.Filled">
+                        @GetConnectionStatusText()
+                    </MudChip>
+                }
+            </div>
+        </CardHeaderContent>
+    </MudCardHeader>
+
+    <MudCardContent>
+        @if (Channel != null)
+        {
+            <MudStack Spacing="2">
+                <!-- Estado de Conexion -->
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@GetConnectionStatusIcon()"
+                             Color="@GetConnectionStatusColor()"
+                             Size="Size.Small"
+                             Class="mr-2" />
+                    <MudText Typo="Typo.body2">@GetConnectionStatusDescription()</MudText>
+                </div>
+
+                <!-- Metodo de Autenticacion -->
+                <div class="d-flex align-center">
+                    <MudIcon Icon="@(Channel.AuthMethod == AuthMethod.OAuth ? Icons.Material.Filled.Key : Icons.Material.Filled.VpnKey)"
+                             Size="Size.Small"
+                             Class="mr-2"
+                             Color="Color.Default" />
+                    <MudText Typo="Typo.body2">
+                        Autenticacion: <strong>@GetAuthMethodName()</strong>
+                    </MudText>
+                </div>
+
+                <!-- Expiracion del Token -->
+                @if (Channel.TokenExpiresAt.HasValue && Channel.AuthMethod == AuthMethod.OAuth)
+                {
+                    var daysToExpire = (Channel.TokenExpiresAt.Value - DateTime.UtcNow).TotalDays;
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Schedule"
+                                 Size="Size.Small"
+                                 Class="mr-2"
+                                 Color="@(daysToExpire < 7 ? Color.Warning : Color.Default)" />
+                        <MudText Typo="Typo.body2">
+                            Token expira: <strong>@GetExpirationText()</strong>
+                        </MudText>
+                    </div>
+                }
+
+                <!-- Ultimo Refresh -->
+                @if (Channel.LastRefreshSuccessAt.HasValue)
+                {
+                    <div class="d-flex align-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" Class="mr-2" Color="Color.Success" />
+                        <MudText Typo="Typo.body2">
+                            Ultimo refresh: @Channel.LastRefreshSuccessAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                        </MudText>
+                    </div>
+                }
+
+                <!-- Scopes -->
+                @if (!string.IsNullOrEmpty(Channel.Scopes))
+                {
+                    <MudExpansionPanels Elevation="0" Dense="true">
+                        <MudExpansionPanel Text="Permisos autorizados" Dense="true">
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var scope in Channel.Scopes.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@scope</MudChip>
+                                }
+                            </div>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
+                }
+
+                <!-- Alerta de Error -->
+                @if (!string.IsNullOrEmpty(Channel.LastOAuthErrorCode) || Channel.ConnectionStatus == ConnectionStatus.Error)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">
+                        @if (!string.IsNullOrEmpty(Channel.LastOAuthErrorCode))
+                        {
+                            <text>Error: @Channel.LastOAuthErrorCode</text>
+                        }
+                        @if (!string.IsNullOrEmpty(Channel.LastErrorMessage))
+                        {
+                            <br />@Channel.LastErrorMessage
+                        }
+                    </MudAlert>
+                }
+
+                <!-- Alerta de Reconexion -->
+                @if (Channel.ConnectionStatus == ConnectionStatus.NeedsReauth)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="mr-1" />
+                        Se requiere reconectar. El token ha expirado o fue revocado.
+                    </MudAlert>
+                }
+            </MudStack>
+        }
+        else
+        {
+            <MudStack Spacing="2">
+                <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined">
+                    <MudIcon Icon="@Icons.Material.Filled.LinkOff" Size="Size.Small" Class="mr-1" />
+                    No conectado
+                </MudAlert>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @GetSetupInstructions()
+                </MudText>
+            </MudStack>
+        }
+    </MudCardContent>
+
+    <MudCardActions Class="justify-end">
+        @if (Channel != null)
+        {
+            <MudButton Size="Size.Small"
+                       Variant="Variant.Text"
+                       Color="Color.Default"
+                       StartIcon="@Icons.Material.Filled.ToggleOn"
+                       OnClick="@(() => OnToggleEnabled.InvokeAsync(Channel))">
+                @(Channel.IsEnabled ? "Deshabilitar" : "Habilitar")
+            </MudButton>
+
+            @if (Channel.ConnectionStatus == ConnectionStatus.NeedsReauth ||
+                 Channel.ConnectionStatus == ConnectionStatus.Error ||
+                 Channel.ConnectionStatus == ConnectionStatus.Revoked)
+            {
+                <MudButton Size="Size.Small"
+                           Variant="Variant.Filled"
+                           Color="Color.Warning"
+                           StartIcon="@Icons.Material.Filled.Refresh"
+                           OnClick="@(() => OnReconnect.InvokeAsync(Channel))">
+                    Reconectar
+                </MudButton>
+            }
+            else
+            {
+                <MudButton Size="Size.Small"
+                           Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Settings"
+                           OnClick="@(() => OnConfigure.InvokeAsync(Channel))">
+                    Configurar
+                </MudButton>
+            }
+
+            <MudButton Size="Size.Small"
+                       Variant="Variant.Text"
+                       Color="Color.Error"
+                       StartIcon="@Icons.Material.Filled.Delete"
+                       OnClick="@(() => OnDelete.InvokeAsync(Channel))">
+                Eliminar
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Size="Size.Small"
+                       Variant="Variant.Filled"
+                       Color="@GetNetworkColor()"
+                       StartIcon="@Icons.Material.Filled.Link"
+                       OnClick="@(() => OnConnect.InvokeAsync(NetworkType))">
+                Conectar @GetNetworkName()
+            </MudButton>
+        }
+    </MudCardActions>
+</MudCard>
+
+@code {
+    [Parameter]
+    public NetworkType NetworkType { get; set; }
+
+    [Parameter]
+    public SocialChannelConfig? Channel { get; set; }
+
+    [Parameter]
+    public EventCallback<NetworkType> OnConnect { get; set; }
+
+    [Parameter]
+    public EventCallback<SocialChannelConfig> OnConfigure { get; set; }
+
+    [Parameter]
+    public EventCallback<SocialChannelConfig> OnReconnect { get; set; }
+
+    [Parameter]
+    public EventCallback<SocialChannelConfig> OnDelete { get; set; }
+
+    [Parameter]
+    public EventCallback<SocialChannelConfig> OnToggleEnabled { get; set; }
+
+    private string GetNetworkName() => NetworkType switch
+    {
+        NetworkType.Facebook => "Facebook",
+        NetworkType.Instagram => "Instagram",
+        NetworkType.TikTok => "TikTok",
+        NetworkType.X => "X (Twitter)",
+        NetworkType.YouTube => "YouTube",
+        NetworkType.LinkedIn => "LinkedIn",
+        _ => NetworkType.ToString()
+    };
+
+    private string GetNetworkIcon() => NetworkType switch
+    {
+        NetworkType.Facebook => Icons.Custom.Brands.Facebook,
+        NetworkType.Instagram => Icons.Custom.Brands.Instagram,
+        NetworkType.TikTok => Icons.Custom.Brands.TikTok,
+        NetworkType.X => Icons.Custom.Brands.Twitter,
+        NetworkType.YouTube => Icons.Custom.Brands.YouTube,
+        NetworkType.LinkedIn => Icons.Custom.Brands.LinkedIn,
+        _ => Icons.Material.Filled.Share
+    };
+
+    private Color GetNetworkColor() => NetworkType switch
+    {
+        NetworkType.Facebook => Color.Primary,
+        NetworkType.Instagram => Color.Secondary,
+        NetworkType.TikTok => Color.Dark,
+        NetworkType.X => Color.Dark,
+        NetworkType.YouTube => Color.Error,
+        NetworkType.LinkedIn => Color.Info,
+        _ => Color.Default
+    };
+
+    private string GetCardClass()
+    {
+        if (Channel == null) return "";
+        return Channel.ConnectionStatus switch
+        {
+            ConnectionStatus.Connected => "border-success",
+            ConnectionStatus.NeedsReauth => "border-warning",
+            ConnectionStatus.Error => "border-error",
+            ConnectionStatus.Revoked => "border-error",
+            _ => ""
+        };
+    }
+
+    private Color GetConnectionStatusColor() => Channel?.ConnectionStatus switch
+    {
+        ConnectionStatus.Connected => Color.Success,
+        ConnectionStatus.NeedsReauth => Color.Warning,
+        ConnectionStatus.Revoked => Color.Error,
+        ConnectionStatus.Error => Color.Error,
+        ConnectionStatus.Pending => Color.Info,
+        _ => Color.Default
+    };
+
+    private string GetConnectionStatusIcon() => Channel?.ConnectionStatus switch
+    {
+        ConnectionStatus.Connected => Icons.Material.Filled.CheckCircle,
+        ConnectionStatus.NeedsReauth => Icons.Material.Filled.Warning,
+        ConnectionStatus.Revoked => Icons.Material.Filled.Block,
+        ConnectionStatus.Error => Icons.Material.Filled.Error,
+        ConnectionStatus.Pending => Icons.Material.Filled.HourglassEmpty,
+        _ => Icons.Material.Filled.Help
+    };
+
+    private string GetConnectionStatusText() => Channel?.ConnectionStatus switch
+    {
+        ConnectionStatus.Connected => "Conectado",
+        ConnectionStatus.NeedsReauth => "Requiere reconexion",
+        ConnectionStatus.Revoked => "Revocado",
+        ConnectionStatus.Error => "Error",
+        ConnectionStatus.Pending => "Pendiente",
+        _ => "Desconocido"
+    };
+
+    private string GetConnectionStatusDescription() => Channel?.ConnectionStatus switch
+    {
+        ConnectionStatus.Connected => "La conexion esta activa y funcionando correctamente.",
+        ConnectionStatus.NeedsReauth => "Se requiere que vuelvas a autorizar la aplicacion.",
+        ConnectionStatus.Revoked => "El acceso fue revocado desde la red social.",
+        ConnectionStatus.Error => "Ocurrio un error al refrescar los tokens.",
+        ConnectionStatus.Pending => "La conexion esta en proceso de configuracion.",
+        _ => ""
+    };
+
+    private string GetAuthMethodName() => Channel?.AuthMethod switch
+    {
+        AuthMethod.OAuth => "OAuth 2.0",
+        AuthMethod.ApiKey => "API Key",
+        _ => "Desconocido"
+    };
+
+    private string GetExpirationText()
+    {
+        if (Channel?.TokenExpiresAt == null) return "No expira";
+
+        var timeLeft = Channel.TokenExpiresAt.Value - DateTime.UtcNow;
+        if (timeLeft.TotalDays > 30)
+            return $"en {(int)timeLeft.TotalDays} dias";
+        if (timeLeft.TotalDays > 1)
+            return $"en {(int)timeLeft.TotalDays} dias";
+        if (timeLeft.TotalHours > 1)
+            return $"en {(int)timeLeft.TotalHours} horas";
+        if (timeLeft.TotalMinutes > 0)
+            return $"en {(int)timeLeft.TotalMinutes} minutos";
+        return "Expirado";
+    }
+
+    private string GetSetupInstructions() => NetworkType switch
+    {
+        NetworkType.Facebook => "Conecta tu pagina de Facebook para publicar contenido.",
+        NetworkType.Instagram => "Conecta tu cuenta de Instagram Business para publicar contenido.",
+        NetworkType.TikTok => "Conecta tu cuenta de TikTok para subir videos.",
+        NetworkType.X => "Conecta tu cuenta de X (Twitter) para publicar tweets.",
+        NetworkType.YouTube => "Conecta tu canal de YouTube para subir videos.",
+        NetworkType.LinkedIn => "Conecta tu perfil de LinkedIn para publicar actualizaciones.",
+        _ => "Conecta esta red social para comenzar a publicar."
+    };
+}
+
+<style>
+    .social-card {
+        transition: all 0.3s ease;
+    }
+    .social-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    .border-success {
+        border-left: 4px solid var(--mud-palette-success);
+    }
+    .border-warning {
+        border-left: 4px solid var(--mud-palette-warning);
+    }
+    .border-error {
+        border-left: 4px solid var(--mud-palette-error);
+    }
+</style>
