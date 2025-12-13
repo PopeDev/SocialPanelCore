@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using SocialPanelCore.Domain.Configuration;
 using SocialPanelCore.Domain.Entities;
 using SocialPanelCore.Domain.Enums;
 using SocialPanelCore.Domain.Interfaces;
@@ -26,6 +28,7 @@ public class SocialPublisherService : ISocialPublisherService
     private readonly IMetaGraphApiClient _metaApiClient;
     private readonly ITikTokApiClient _tikTokApiClient;
     private readonly YouTubeApiService _youTubeService;
+    private readonly StorageSettings _storageSettings;
     private readonly ILogger<SocialPublisherService> _logger;
 
     public SocialPublisherService(
@@ -36,6 +39,7 @@ public class SocialPublisherService : ISocialPublisherService
         IMetaGraphApiClient metaApiClient,
         ITikTokApiClient tikTokApiClient,
         YouTubeApiService youTubeService,
+        IOptions<StorageSettings> storageSettings,
         ILogger<SocialPublisherService> logger)
     {
         _context = context;
@@ -45,6 +49,7 @@ public class SocialPublisherService : ISocialPublisherService
         _metaApiClient = metaApiClient;
         _tikTokApiClient = tikTokApiClient;
         _youTubeService = youTubeService;
+        _storageSettings = storageSettings.Value;
         _logger = logger;
     }
 
@@ -510,9 +515,9 @@ public class SocialPublisherService : ISocialPublisherService
 
         // YouTube requiere video para publicar
         var videoMedia = post.BasePost?.Media?
-            .FirstOrDefault(m => m.ContentType?.StartsWith("video/") == true);
+            .FirstOrDefault(m => m.IsVideo);
 
-        if (videoMedia == null || string.IsNullOrEmpty(videoMedia.FilePath))
+        if (videoMedia == null || string.IsNullOrEmpty(videoMedia.RelativePath))
         {
             _logger.LogWarning("YouTube requiere contenido de video. Publicación de solo texto/imagen no soportada.");
             return $"yt_video_required_{Guid.NewGuid():N}";
@@ -520,8 +525,19 @@ public class SocialPublisherService : ISocialPublisherService
 
         try
         {
+            // Construir la ruta física completa desde RelativePath y StorageSettings
+            var physicalPath = Path.Combine(
+                _storageSettings.UploadsPath,
+                videoMedia.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+
+            if (!File.Exists(physicalPath))
+            {
+                _logger.LogError("Archivo de video no encontrado: {Path}", physicalPath);
+                throw new FileNotFoundException($"Archivo de video no encontrado: {physicalPath}");
+            }
+
             // Leer el archivo de video
-            using var videoStream = File.OpenRead(videoMedia.FilePath);
+            using var videoStream = File.OpenRead(physicalPath);
 
             var videoId = await _youTubeService.UploadVideoAsync(
                 accessToken,

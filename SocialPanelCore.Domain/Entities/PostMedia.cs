@@ -57,6 +57,27 @@ public class PostMedia
     /// </summary>
     public DateTime CreatedAt { get; set; }
 
+    // ========== Propiedades Computadas ==========
+
+    /// <summary>
+    /// URL relativa para servir el archivo desde el servidor web.
+    /// Ejemplo: "/uploads/peluqueriaspaco/instagram/publicacion_navidad_24122025_a1b2c3d4.jpg"
+    /// Nota: Esta URL es relativa al dominio del servidor.
+    /// </summary>
+    public string Url => string.IsNullOrEmpty(RelativePath)
+        ? string.Empty
+        : $"/uploads/{RelativePath.Replace('\\', '/')}";
+
+    /// <summary>
+    /// Indica si el medio es un video basándose en el ContentType.
+    /// </summary>
+    public bool IsVideo => ContentType?.StartsWith("video/", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>
+    /// Indica si el medio es una imagen basándose en el ContentType.
+    /// </summary>
+    public bool IsImage => ContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true;
+
     // ========== Navegación ==========
 
     /// <summary>
