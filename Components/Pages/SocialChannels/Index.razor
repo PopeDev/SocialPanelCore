@@ -91,6 +91,14 @@
                                            Size="Size.Small" />
                             </MudText>
 
+                            <MudText Typo="Typo.body2" Class="mb-2">
+                                <strong>Permitir Medios:</strong>
+                                <MudSwitch T="bool" Value="@channel.AllowMedia"
+                                           ValueChanged="@((bool v) => ToggleAllowMedia(channel, v))"
+                                           Color="Color.Info"
+                                           Size="Size.Small" />
+                            </MudText>
+
                             @if (channel.TokenExpiresAt.HasValue)
                             {
                                 var daysToExpire = (channel.TokenExpiresAt.Value - DateTime.UtcNow).Days;
@@ -206,6 +214,20 @@
                 Snackbar.Add($"Canal habilitado", Severity.Success);
             }
             await LoadChannels();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ToggleAllowMedia(SocialChannelConfig channel, bool value)
+    {
+        try
+        {
+            await SocialChannelConfigService.UpdateAllowMediaAsync(channel.Id, value);
+            channel.AllowMedia = value;
+            Snackbar.Add($"Configuración de medios actualizada para {GetNetworkName(channel.NetworkType)}", Severity.Success);
         }
         catch (Exception ex)
         {

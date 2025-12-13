@@ -311,4 +311,19 @@ public class SocialChannelConfigService : ISocialChannelConfigService
     {
         return _protector.Unprotect(config.AccessToken);
     }
+
+    // ========== Configuración de medios ==========
+    public async Task UpdateAllowMediaAsync(Guid channelId, bool allowMedia)
+    {
+        var channel = await _context.SocialChannelConfigs.FindAsync(channelId)
+            ?? throw new InvalidOperationException($"Canal no encontrado: {channelId}");
+
+        channel.AllowMedia = allowMedia;
+        channel.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation(
+            "AllowMedia actualizado para canal {ChannelId}: {AllowMedia}",
+            channelId, allowMedia);
+    }
 }
