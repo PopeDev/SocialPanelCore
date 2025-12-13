@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using MudBlazor.Services;
 using Serilog;
 using SocialPanelCore.Infrastructure.Services;
 using SocialPanelCore.Components;
 using SocialPanelCore.Components.Account;
+using SocialPanelCore.Domain.Configuration;
 using SocialPanelCore.Domain.Interfaces;
 using SocialPanelCore.Infrastructure.Data;
 using SocialPanelCore.Domain.Entities;
@@ -57,6 +59,10 @@ try
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
         options.UseNpgsql(connectionString));
 
+    // Configuración de almacenamiento de medios
+    builder.Services.Configure<StorageSettings>(
+        builder.Configuration.GetSection(StorageSettings.SectionName));
+
     builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
     // ASP.NET Core Identity
@@ -94,6 +100,7 @@ try
     builder.Services.AddScoped<IContentAdaptationService, ContentAdaptationService>();
     builder.Services.AddScoped<ISocialPublisherService, SocialPublisherService>();
     builder.Services.AddScoped<IOAuthService, OAuthService>();
+    builder.Services.AddScoped<IMediaStorageService, MediaStorageService>();
 
     // Configurar Hangfire con PostgreSQL para trabajos en background
     builder.Services.AddHangfire(config =>
@@ -147,6 +154,17 @@ try
 
     // Servir archivos estáticos (incluido mediavault)
     app.UseStaticFiles();
+
+    // Servir archivos de uploads
+    var uploadsPath = builder.Configuration.GetSection("Storage:UploadsPath").Value;
+    if (!string.IsNullOrEmpty(uploadsPath) && Directory.Exists(uploadsPath))
+    {
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new PhysicalFileProvider(uploadsPath),
+            RequestPath = "/uploads"
+        });
+    }
 
     app.UseAntiforgery();
 

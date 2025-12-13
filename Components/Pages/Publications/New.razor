@@ -6,6 +6,7 @@
 @using SocialPanelCore.Domain.Enums
 @inject IAccountService AccountService
 @inject IBasePostService BasePostService
+@inject IMediaStorageService MediaStorageService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -296,10 +297,26 @@
     private Task OnFilesSelected(InputFileChangeEventArgs e)
     {
         _uploadedFiles.Clear();
+        var errors = new List<string>();
+
         foreach (var file in e.GetMultipleFiles(10))
         {
-            _uploadedFiles.Add(file);
+            var (isValid, errorMessage) = MediaStorageService.ValidateFile(file);
+            if (isValid)
+            {
+                _uploadedFiles.Add(file);
+            }
+            else
+            {
+                errors.Add($"{file.Name}: {errorMessage}");
+            }
         }
+
+        if (errors.Any())
+        {
+            Snackbar.Add(string.Join("\n", errors), Severity.Warning);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -334,7 +351,7 @@
             // Create as draft with a default scheduled date
             var scheduledDate = DateTime.UtcNow.AddDays(1);
 
-            await BasePostService.CreatePostAsync(
+            var post = await BasePostService.CreatePostAsync(
                 _model.AccountId,
                 userId,
                 _model.Content,
@@ -343,6 +360,29 @@
                 _model.Title,
                 BasePostState.Borrador
             );
+
+            // Guardar medios si hay archivos subidos
+            if (_uploadedFiles.Any())
+            {
+                var account = _accounts.FirstOrDefault(a => a.Id == _model.AccountId);
+                var accountName = account?.Name ?? "default";
+                var primaryNetwork = selectedNetworks.First();
+
+                try
+                {
+                    await MediaStorageService.SaveMediaBatchAsync(
+                        post.Id,
+                        _uploadedFiles,
+                        accountName,
+                        primaryNetwork,
+                        _model.Title ?? "publicacion"
+                    );
+                }
+                catch (Exception ex)
+                {
+                    Snackbar.Add($"Error guardando algunos archivos: {ex.Message}", Severity.Warning);
+                }
+            }
 
             Snackbar.Add("Borrador guardado exitosamente", Severity.Success);
             Navigation.NavigateTo("/publications");
@@ -396,7 +436,7 @@
             }
 
             // Crear publicación con estado Planificada
-            await BasePostService.CreatePostAsync(
+            var post = await BasePostService.CreatePostAsync(
                 _model.AccountId,
                 userId,
                 _model.Content,
@@ -406,11 +446,45 @@
                 BasePostState.Planificada
             );
 
-            Snackbar.Add(
-                _model.ScheduleNow
-                    ? "Publicación creada. Las variantes se generarán automáticamente."
-                    : "Publicación programada exitosamente",
-                Severity.Success);
+            // Guardar medios si hay archivos subidos
+            if (_uploadedFiles.Any())
+            {
+                var account = _accounts.FirstOrDefault(a => a.Id == _model.AccountId);
+                var accountName = account?.Name ?? "default";
+
+                // Guardar para la primera red seleccionada (los medios son compartidos)
+                var primaryNetwork = selectedNetworks.First();
+
+                try
+                {
+                    await MediaStorageService.SaveMediaBatchAsync(
+                        post.Id,
+                        _uploadedFiles,
+                        accountName,
+                        primaryNetwork,
+                        _model.Title ?? "publicacion"
+                    );
+
+                    Snackbar.Add(
+                        $"Publicación creada con {_uploadedFiles.Count} archivo(s) adjunto(s)",
+                        Severity.Success);
+                }
+                catch (Exception ex)
+                {
+                    Snackbar.Add(
+                        $"Publicación creada pero hubo error con algunos archivos: {ex.Message}",
+                        Severity.Warning);
+                }
+            }
+            else
+            {
+                Snackbar.Add(
+                    _model.ScheduleNow
+                        ? "Publicación creada. Las variantes se generarán automáticamente."
+                        : "Publicación programada exitosamente",
+                    Severity.Success);
+            }
+
             Navigation.NavigateTo("/publications");
         }
         catch (Exception ex)

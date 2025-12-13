@@ -44,4 +44,10 @@ public interface ISocialChannelConfigService
 
     // ========== Verificación de conexión ==========
     Task<bool> TestConnectionAsync(Guid id);
+
+    // ========== Configuración de medios ==========
+    /// <summary>
+    /// Actualiza si una red social permite publicar medios
+    /// </summary>
+    Task UpdateAllowMediaAsync(Guid channelId, bool allowMedia);
 }
