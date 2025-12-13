@@ -72,7 +72,12 @@ public class MediaStorageService : IMediaStorageService
         // Guardar archivo físico
         try
         {
-            await using var stream = file.OpenReadStream(maxAllowedSize: _settings.MaxFileSizeBytes);
+            // Determinar el tamaño máximo según el tipo de archivo
+            var ext = extension.ToLowerInvariant();
+            var isVideo = IsVideoExtension(ext);
+            var maxSize = isVideo ? _settings.MaxVideoFileSizeBytes : _settings.MaxImageFileSizeBytes;
+
+            await using var stream = file.OpenReadStream(maxAllowedSize: maxSize);
             await using var fileStream = new FileStream(fullPath, FileMode.Create);
             await stream.CopyToAsync(fileStream);
 
@@ -227,15 +232,27 @@ public class MediaStorageService : IMediaStorageService
 
     public (bool IsValid, string? ErrorMessage) ValidateFile(IBrowserFile file)
     {
-        // Validar tamaño
-        if (file.Size > _settings.MaxFileSizeBytes)
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        var contentType = file.ContentType?.ToLowerInvariant() ?? "";
+        var isVideo = IsVideoExtension(extension) || contentType.StartsWith("video/");
+        var isImage = IsImageExtension(extension) || contentType.StartsWith("image/");
+
+        // Verificar si es video y está habilitado
+        if (isVideo && !_settings.AllowVideoUpload)
         {
-            var maxMB = _settings.MaxFileSizeBytes / (1024 * 1024);
-            return (false, $"El archivo excede el tamaño máximo permitido ({maxMB}MB)");
+            return (false, "La subida de videos no está habilitada");
+        }
+
+        // Validar tamaño según tipo de archivo
+        var maxSize = isVideo ? _settings.MaxVideoFileSizeBytes : _settings.MaxImageFileSizeBytes;
+        if (file.Size > maxSize)
+        {
+            var maxMB = maxSize / (1024 * 1024);
+            var tipo = isVideo ? "video" : "imagen";
+            return (false, $"El archivo de {tipo} excede el tamaño máximo permitido ({maxMB}MB)");
         }
 
         // Validar extensión
-        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
         if (!_settings.AllowedExtensions.Contains(extension))
         {
             var allowed = string.Join(", ", _settings.AllowedExtensions);
@@ -243,13 +260,28 @@ public class MediaStorageService : IMediaStorageService
         }
 
         // Validar tipo MIME (básico)
-        var contentType = file.ContentType?.ToLowerInvariant() ?? "";
-        if (!contentType.StartsWith("image/"))
+        if (!isImage && !isVideo)
         {
-            return (false, "Solo se permiten archivos de imagen");
+            return (false, "Solo se permiten archivos de imagen o video");
         }
 
         return (true, null);
+    }
+
+    /// <summary>
+    /// Verifica si la extensión corresponde a un video
+    /// </summary>
+    private bool IsVideoExtension(string extension)
+    {
+        return _settings.AllowedVideoExtensions.Contains(extension);
+    }
+
+    /// <summary>
+    /// Verifica si la extensión corresponde a una imagen
+    /// </summary>
+    private bool IsImageExtension(string extension)
+    {
+        return _settings.AllowedImageExtensions.Contains(extension);
     }
 
     #region Helpers
@@ -306,10 +338,17 @@ public class MediaStorageService : IMediaStorageService
     {
         return extension.ToLowerInvariant() switch
         {
+            // Imágenes
             ".jpg" or ".jpeg" => "image/jpeg",
             ".png" => "image/png",
             ".gif" => "image/gif",
             ".webp" => "image/webp",
+            // Videos
+            ".mp4" => "video/mp4",
+            ".mov" => "video/quicktime",
+            ".avi" => "video/x-msvideo",
+            ".webm" => "video/webm",
+            ".mkv" => "video/x-matroska",
             _ => "application/octet-stream"
         };
     }
