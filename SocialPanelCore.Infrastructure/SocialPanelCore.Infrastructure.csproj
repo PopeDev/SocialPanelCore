@@ -16,6 +16,11 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- Sprint 5: External API Integration -->
+    <PackageReference Include="Refit" Version="7.1.2" />
+    <PackageReference Include="Refit.HttpClientFactory" Version="7.1.2" />
+    <PackageReference Include="Google.Apis.YouTube.v3" Version="1.68.0.3520" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.68.0" />
   </ItemGroup>
 
   <ItemGroup>

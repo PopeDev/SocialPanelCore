@@ -1,17 +1,19 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Web;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using SocialPanelCore.Domain.Entities;
 using SocialPanelCore.Domain.Enums;
 using SocialPanelCore.Domain.Interfaces;
 using SocialPanelCore.Infrastructure.Data;
+using SocialPanelCore.Infrastructure.ExternalApis.Meta;
+using SocialPanelCore.Infrastructure.ExternalApis.TikTok;
+using SocialPanelCore.Infrastructure.ExternalApis.X;
+using SocialPanelCore.Infrastructure.ExternalApis.YouTube;
+using SocialPanelCore.Infrastructure.Helpers;
 
 namespace SocialPanelCore.Infrastructure.Services;
 
@@ -20,17 +22,29 @@ public class SocialPublisherService : ISocialPublisherService
     private readonly ApplicationDbContext _context;
     private readonly ISocialChannelConfigService _channelConfigService;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IXApiClient _xApiClient;
+    private readonly IMetaGraphApiClient _metaApiClient;
+    private readonly ITikTokApiClient _tikTokApiClient;
+    private readonly YouTubeApiService _youTubeService;
     private readonly ILogger<SocialPublisherService> _logger;
 
     public SocialPublisherService(
         ApplicationDbContext context,
         ISocialChannelConfigService channelConfigService,
         IHttpClientFactory httpClientFactory,
+        IXApiClient xApiClient,
+        IMetaGraphApiClient metaApiClient,
+        ITikTokApiClient tikTokApiClient,
+        YouTubeApiService youTubeService,
         ILogger<SocialPublisherService> logger)
     {
         _context = context;
         _channelConfigService = channelConfigService;
         _httpClientFactory = httpClientFactory;
+        _xApiClient = xApiClient;
+        _metaApiClient = metaApiClient;
+        _tikTokApiClient = tikTokApiClient;
+        _youTubeService = youTubeService;
         _logger = logger;
     }
 
@@ -100,6 +114,8 @@ public class SocialPublisherService : ISocialPublisherService
             .Include(ap => ap.BasePost)
                 .ThenInclude(bp => bp.Account)
                     .ThenInclude(a => a.SocialChannels)
+            .Include(ap => ap.BasePost)
+                .ThenInclude(bp => bp.Media)
             .FirstOrDefaultAsync(ap => ap.Id == adaptedPostId)
             ?? throw new InvalidOperationException($"Post adaptado no encontrado: {adaptedPostId}");
 
@@ -128,6 +144,12 @@ public class SocialPublisherService : ISocialPublisherService
         {
             string externalId;
 
+            // Obtener URLs de media si existen
+            var mediaUrls = adaptedPost.BasePost.Media?
+                .Where(m => !string.IsNullOrEmpty(m.Url))
+                .Select(m => m.Url!)
+                .ToList() ?? new List<string>();
+
             // Publicar segun la red y el metodo de autenticacion
             if (channelConfig.AuthMethod == AuthMethod.ApiKey)
             {
@@ -139,7 +161,7 @@ public class SocialPublisherService : ISocialPublisherService
 
                 externalId = adaptedPost.NetworkType switch
                 {
-                    NetworkType.X => await PublishToXAsync(adaptedPost, credentials.Value),
+                    NetworkType.X => await PublishToXWithRefitAsync(adaptedPost, credentials.Value),
                     _ => throw new NotSupportedException($"Red {adaptedPost.NetworkType} no soporta ApiKey")
                 };
             }
@@ -153,11 +175,11 @@ public class SocialPublisherService : ISocialPublisherService
 
                 externalId = adaptedPost.NetworkType switch
                 {
-                    NetworkType.Facebook => await PublishToFacebookAsync(adaptedPost, credentials.Value.AccessToken, channelConfig),
-                    NetworkType.Instagram => await PublishToInstagramAsync(adaptedPost, credentials.Value.AccessToken, channelConfig),
+                    NetworkType.Facebook => await PublishToFacebookWithRefitAsync(adaptedPost, credentials.Value.AccessToken, mediaUrls),
+                    NetworkType.Instagram => await PublishToInstagramWithRefitAsync(adaptedPost, credentials.Value.AccessToken, mediaUrls),
                     NetworkType.LinkedIn => await PublishToLinkedInAsync(adaptedPost, credentials.Value.AccessToken),
-                    NetworkType.TikTok => await PublishToTikTokAsync(adaptedPost, credentials.Value.AccessToken),
-                    NetworkType.YouTube => await PublishToYouTubeAsync(adaptedPost, credentials.Value.AccessToken),
+                    NetworkType.TikTok => await PublishToTikTokWithRefitAsync(adaptedPost, credentials.Value.AccessToken, mediaUrls),
+                    NetworkType.YouTube => await PublishToYouTubeWithSdkAsync(adaptedPost, credentials.Value.AccessToken),
                     _ => throw new NotSupportedException($"Red no soportada: {adaptedPost.NetworkType}")
                 };
             }
@@ -215,191 +237,313 @@ public class SocialPublisherService : ISocialPublisherService
         }
     }
 
-    #region X (Twitter) - OAuth 1.0a
+    #region X (Twitter) - Refit con OAuth 1.0a
 
-    private async Task<string> PublishToXAsync(AdaptedPost post,
+    private async Task<string> PublishToXWithRefitAsync(
+        AdaptedPost post,
         (string ApiKey, string ApiSecret, string AccessToken, string AccessTokenSecret) credentials)
     {
-        _logger.LogInformation("Publicando en X (Twitter)...");
+        _logger.LogInformation("Publicando en X (Twitter) con Refit...");
 
-        using var client = _httpClientFactory.CreateClient();
-
-        var tweetUrl = "https://api.twitter.com/2/tweets";
-        var tweetContent = new { text = post.AdaptedContent };
-        var jsonContent = JsonSerializer.Serialize(tweetContent);
-
-        // Generar firma OAuth 1.0a
-        var authHeader = GenerateOAuth1Header(
+        // Generar header OAuth 1.0a
+        var authHeader = OAuth1Helper.GenerateOAuth1Header(
             "POST",
-            tweetUrl,
+            "https://api.x.com/2/tweets",
             credentials.ApiKey,
             credentials.ApiSecret,
             credentials.AccessToken,
             credentials.AccessTokenSecret);
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, tweetUrl);
-        request.Headers.Add("Authorization", authHeader);
-        request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-        var response = await client.SendAsync(request);
-        var responseContent = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
+        var request = new XTweetRequest
         {
-            _logger.LogError("Error de X/Twitter: {StatusCode} - {Content}",
-                response.StatusCode, responseContent);
-            throw new Exception($"Error de X/Twitter: {response.StatusCode} - {responseContent}");
-        }
-
-        var result = JsonSerializer.Deserialize<TwitterTweetResponse>(responseContent);
-        return result?.Data?.Id ?? throw new Exception("No se recibio ID del tweet");
-    }
-
-    private string GenerateOAuth1Header(string method, string url,
-        string consumerKey, string consumerSecret,
-        string accessToken, string accessTokenSecret)
-    {
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
-        var nonce = Convert.ToBase64String(Encoding.UTF8.GetBytes(Guid.NewGuid().ToString("N")));
-
-        var oauthParams = new SortedDictionary<string, string>
-        {
-            ["oauth_consumer_key"] = consumerKey,
-            ["oauth_nonce"] = nonce,
-            ["oauth_signature_method"] = "HMAC-SHA1",
-            ["oauth_timestamp"] = timestamp,
-            ["oauth_token"] = accessToken,
-            ["oauth_version"] = "1.0"
+            Text = post.AdaptedContent
         };
 
-        // Crear base string
-        var paramString = string.Join("&",
-            oauthParams.Select(kvp => $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value)}"));
+        try
+        {
+            var response = await _xApiClient.CreateTweetAsync(request, authHeader);
 
-        var baseString = $"{method.ToUpper()}&{Uri.EscapeDataString(url)}&{Uri.EscapeDataString(paramString)}";
-
-        // Crear signing key
-        var signingKey = $"{Uri.EscapeDataString(consumerSecret)}&{Uri.EscapeDataString(accessTokenSecret)}";
-
-        // Generar firma
-        using var hmac = new HMACSHA1(Encoding.UTF8.GetBytes(signingKey));
-        var signatureBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(baseString));
-        var signature = Convert.ToBase64String(signatureBytes);
-
-        oauthParams["oauth_signature"] = signature;
-
-        // Crear header
-        var headerValue = string.Join(", ",
-            oauthParams.Select(kvp => $"{Uri.EscapeDataString(kvp.Key)}=\"{Uri.EscapeDataString(kvp.Value)}\""));
-
-        return $"OAuth {headerValue}";
+            return response.Data?.Id
+                ?? throw new Exception("No se recibió ID del tweet");
+        }
+        catch (Refit.ApiException ex)
+        {
+            var errorContent = await ex.GetContentAsAsync<string>();
+            _logger.LogError("Error de X/Twitter API: {StatusCode} - {Content}",
+                ex.StatusCode, errorContent);
+            throw new Exception($"Error de X/Twitter: {ex.StatusCode} - {errorContent}");
+        }
     }
 
     #endregion
 
-    #region Facebook - Graph API
+    #region Facebook - Refit
 
-    private async Task<string> PublishToFacebookAsync(AdaptedPost post, string accessToken, SocialChannelConfig config)
+    private async Task<string> PublishToFacebookWithRefitAsync(
+        AdaptedPost post,
+        string accessToken,
+        List<string> mediaUrls)
     {
-        _logger.LogInformation("Publicando en Facebook...");
+        _logger.LogInformation("Publicando en Facebook con Refit...");
 
-        using var client = _httpClientFactory.CreateClient();
-
-        // Primero obtener las paginas del usuario
-        var pagesUrl = $"https://graph.facebook.com/v18.0/me/accounts?access_token={accessToken}";
-        var pagesResponse = await client.GetAsync(pagesUrl);
-
-        if (!pagesResponse.IsSuccessStatusCode)
+        try
         {
-            var error = await pagesResponse.Content.ReadAsStringAsync();
-            throw new Exception($"Error obteniendo paginas de Facebook: {error}");
+            // Obtener páginas del usuario
+            var pagesResponse = await _metaApiClient.GetUserPagesAsync(accessToken);
+            var page = pagesResponse.Data?.FirstOrDefault()
+                ?? throw new Exception("No se encontraron páginas de Facebook");
+
+            // Usar el token de la página si está disponible
+            var pageToken = page.AccessToken ?? accessToken;
+
+            // Si hay imágenes, publicar con imagen
+            if (mediaUrls.Any())
+            {
+                var response = await _metaApiClient.CreateFacebookPhotoPostAsync(
+                    page.Id!,
+                    post.AdaptedContent,
+                    mediaUrls.First(),
+                    pageToken);
+
+                return response.Id
+                    ?? throw new Exception("No se recibió ID del post de Facebook");
+            }
+            else
+            {
+                // Publicar solo texto
+                var response = await _metaApiClient.CreateFacebookPostAsync(
+                    page.Id!,
+                    post.AdaptedContent,
+                    pageToken);
+
+                return response.Id
+                    ?? throw new Exception("No se recibió ID del post de Facebook");
+            }
         }
-
-        var pagesData = await pagesResponse.Content.ReadFromJsonAsync<FacebookPagesResponse>();
-        var page = pagesData?.Data?.FirstOrDefault();
-
-        if (page == null)
+        catch (Refit.ApiException ex)
         {
-            throw new Exception("No se encontraron paginas de Facebook");
+            var errorContent = await ex.GetContentAsAsync<string>();
+            _logger.LogError("Error de Facebook API: {StatusCode} - {Content}",
+                ex.StatusCode, errorContent);
+            throw new Exception($"Error de Facebook: {ex.StatusCode} - {errorContent}");
         }
-
-        // Publicar en la pagina usando el page access token
-        var postUrl = $"https://graph.facebook.com/v18.0/{page.Id}/feed";
-        var postContent = new FormUrlEncodedContent(new Dictionary<string, string>
-        {
-            ["message"] = post.AdaptedContent,
-            ["access_token"] = page.AccessToken ?? accessToken
-        });
-
-        var response = await client.PostAsync(postUrl, postContent);
-        var responseContent = await response.Content.ReadAsStringAsync();
-
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new Exception($"Error publicando en Facebook: {responseContent}");
-        }
-
-        var result = JsonSerializer.Deserialize<FacebookPostResponse>(responseContent);
-        return result?.Id ?? throw new Exception("No se recibio ID del post de Facebook");
     }
 
     #endregion
 
-    #region Instagram - Graph API
+    #region Instagram - Refit
 
-    private async Task<string> PublishToInstagramAsync(AdaptedPost post, string accessToken, SocialChannelConfig config)
+    private async Task<string> PublishToInstagramWithRefitAsync(
+        AdaptedPost post,
+        string accessToken,
+        List<string> mediaUrls)
     {
-        _logger.LogInformation("Publicando en Instagram...");
+        _logger.LogInformation("Publicando en Instagram con Refit...");
 
-        using var client = _httpClientFactory.CreateClient();
-
-        // Obtener el Instagram Business Account
-        var pagesUrl = $"https://graph.facebook.com/v18.0/me/accounts?access_token={accessToken}";
-        var pagesResponse = await client.GetAsync(pagesUrl);
-
-        if (!pagesResponse.IsSuccessStatusCode)
+        try
         {
-            throw new Exception("Error obteniendo paginas de Facebook para Instagram");
+            // Obtener páginas y cuenta de Instagram
+            var pagesResponse = await _metaApiClient.GetUserPagesAsync(accessToken);
+            var page = pagesResponse.Data?.FirstOrDefault()
+                ?? throw new Exception("No se encontraron páginas de Facebook");
+
+            var igAccountResponse = await _metaApiClient.GetInstagramAccountAsync(
+                page.Id!,
+                "instagram_business_account",
+                accessToken);
+
+            var igAccountId = igAccountResponse.InstagramBusinessAccount?.Id
+                ?? throw new Exception("No se encontró cuenta de Instagram Business");
+
+            // Instagram REQUIERE contenido multimedia
+            if (!mediaUrls.Any())
+            {
+                _logger.LogWarning("Instagram requiere imagen. Publicación de solo texto no soportada.");
+                return $"ig_no_media_{Guid.NewGuid():N}";
+            }
+
+            var imageUrl = mediaUrls.First();
+
+            // Step 1: Crear contenedor de media
+            var containerResponse = await _metaApiClient.CreateInstagramMediaContainerAsync(
+                igAccountId,
+                imageUrl,
+                null,  // videoUrl
+                post.AdaptedContent,
+                null,  // mediaType (null para imagen)
+                accessToken);
+
+            var containerId = containerResponse.Id
+                ?? throw new Exception("No se pudo crear contenedor de Instagram");
+
+            // Step 2: Verificar estado del contenedor
+            var maxRetries = 10;
+            for (int i = 0; i < maxRetries; i++)
+            {
+                var statusResponse = await _metaApiClient.GetContainerStatusAsync(
+                    containerId,
+                    "status_code",
+                    accessToken);
+
+                if (statusResponse.StatusCode == "FINISHED")
+                {
+                    break;
+                }
+
+                if (statusResponse.StatusCode == "ERROR")
+                {
+                    throw new Exception("Error procesando media de Instagram");
+                }
+
+                // Esperar antes de reintentar
+                await Task.Delay(2000);
+            }
+
+            // Step 3: Publicar
+            var publishResponse = await _metaApiClient.PublishInstagramMediaAsync(
+                igAccountId,
+                containerId,
+                accessToken);
+
+            return publishResponse.Id
+                ?? throw new Exception("No se recibió ID del post de Instagram");
         }
-
-        var pagesData = await pagesResponse.Content.ReadFromJsonAsync<FacebookPagesResponse>();
-        var page = pagesData?.Data?.FirstOrDefault();
-
-        if (page == null)
+        catch (Refit.ApiException ex)
         {
-            throw new Exception("No se encontraron paginas de Facebook");
+            var errorContent = await ex.GetContentAsAsync<string>();
+            _logger.LogError("Error de Instagram API: {StatusCode} - {Content}",
+                ex.StatusCode, errorContent);
+            throw new Exception($"Error de Instagram: {ex.StatusCode} - {errorContent}");
         }
-
-        // Obtener Instagram Business Account
-        var igUrl = $"https://graph.facebook.com/v18.0/{page.Id}?fields=instagram_business_account&access_token={accessToken}";
-        var igResponse = await client.GetAsync(igUrl);
-
-        if (!igResponse.IsSuccessStatusCode)
-        {
-            throw new Exception("Error obteniendo cuenta de Instagram Business");
-        }
-
-        var igData = await igResponse.Content.ReadFromJsonAsync<InstagramAccountData>();
-        var igAccountId = igData?.InstagramBusinessAccount?.Id;
-
-        if (string.IsNullOrEmpty(igAccountId))
-        {
-            throw new Exception("No se encontro cuenta de Instagram Business vinculada");
-        }
-
-        // Para Instagram, necesitamos crear un contenedor primero
-        // Si es solo texto, no podemos publicar (Instagram requiere imagen/video)
-        // Por ahora, simulamos una publicacion de texto como caption
-
-        _logger.LogWarning("Instagram requiere imagen/video. Publicacion de solo texto no soportada directamente.");
-
-        // Devolver un ID simulado indicando que se necesita media
-        return $"ig_text_only_{Guid.NewGuid():N}";
     }
 
     #endregion
 
-    #region LinkedIn
+    #region TikTok - Refit
+
+    private async Task<string> PublishToTikTokWithRefitAsync(
+        AdaptedPost post,
+        string accessToken,
+        List<string> mediaUrls)
+    {
+        _logger.LogInformation("Publicando en TikTok con Refit...");
+
+        // TikTok requiere contenido multimedia
+        if (!mediaUrls.Any())
+        {
+            _logger.LogWarning("TikTok requiere contenido multimedia");
+            return $"tt_no_media_{Guid.NewGuid():N}";
+        }
+
+        try
+        {
+            var request = new TikTokPhotoPublishRequest
+            {
+                PostInfo = new TikTokPostInfo
+                {
+                    Title = post.BasePost?.Title ?? "",
+                    Description = post.AdaptedContent,
+                    PrivacyLevel = "PUBLIC_TO_EVERYONE"
+                },
+                SourceInfo = new TikTokSourceInfo
+                {
+                    Source = "PULL_FROM_URL",
+                    PhotoImages = mediaUrls,
+                    PhotoCoverIndex = "0"
+                }
+            };
+
+            var authHeader = $"Bearer {accessToken}";
+            var response = await _tikTokApiClient.InitPhotoPublishAsync(request, authHeader);
+
+            if (response.Error != null)
+            {
+                throw new Exception($"Error de TikTok: {response.Error.Message} (Code: {response.Error.Code})");
+            }
+
+            var publishId = response.Data?.PublishId
+                ?? throw new Exception("No se recibió PublishId de TikTok");
+
+            // Polling para verificar estado (máximo 30 segundos)
+            for (int i = 0; i < 10; i++)
+            {
+                await Task.Delay(3000);
+
+                var statusResponse = await _tikTokApiClient.GetPublishStatusAsync(
+                    new TikTokStatusRequest { PublishId = publishId },
+                    authHeader);
+
+                if (statusResponse.Data?.Status == "PUBLISH_COMPLETE")
+                {
+                    return statusResponse.Data.PubliclyAvailablePostId ?? publishId;
+                }
+
+                if (statusResponse.Data?.Status == "FAILED")
+                {
+                    var reasons = statusResponse.Data.FailReason != null
+                        ? string.Join(", ", statusResponse.Data.FailReason)
+                        : "Unknown error";
+                    throw new Exception($"Publicación de TikTok falló: {reasons}");
+                }
+            }
+
+            // Si después de 30 segundos sigue procesando, devolver el publishId
+            _logger.LogWarning("TikTok sigue procesando después de 30s, devolviendo publishId");
+            return publishId;
+        }
+        catch (Refit.ApiException ex)
+        {
+            var errorContent = await ex.GetContentAsAsync<string>();
+            _logger.LogError("Error de TikTok API: {StatusCode} - {Content}",
+                ex.StatusCode, errorContent);
+            throw new Exception($"Error de TikTok: {ex.StatusCode} - {errorContent}");
+        }
+    }
+
+    #endregion
+
+    #region YouTube - SDK Oficial de Google
+
+    private async Task<string> PublishToYouTubeWithSdkAsync(AdaptedPost post, string accessToken)
+    {
+        _logger.LogInformation("Publicando en YouTube con SDK oficial...");
+
+        // YouTube requiere video para publicar
+        var videoMedia = post.BasePost?.Media?
+            .FirstOrDefault(m => m.ContentType?.StartsWith("video/") == true);
+
+        if (videoMedia == null || string.IsNullOrEmpty(videoMedia.FilePath))
+        {
+            _logger.LogWarning("YouTube requiere contenido de video. Publicación de solo texto/imagen no soportada.");
+            return $"yt_video_required_{Guid.NewGuid():N}";
+        }
+
+        try
+        {
+            // Leer el archivo de video
+            using var videoStream = File.OpenRead(videoMedia.FilePath);
+
+            var videoId = await _youTubeService.UploadVideoAsync(
+                accessToken,
+                videoStream,
+                post.BasePost?.Title ?? "Sin título",
+                post.AdaptedContent,
+                post.BasePost?.Title?.Split(' ') ?? Array.Empty<string>(),
+                "public");
+
+            _logger.LogInformation("Video subido a YouTube: {VideoId}", videoId);
+            return videoId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error subiendo video a YouTube");
+            throw new Exception($"Error de YouTube: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region LinkedIn - HttpClient (sin cambios)
 
     private async Task<string> PublishToLinkedInAsync(AdaptedPost post, string accessToken)
     {
@@ -463,86 +607,7 @@ public class SocialPublisherService : ISocialPublisherService
 
     #endregion
 
-    #region TikTok
-
-    private async Task<string> PublishToTikTokAsync(AdaptedPost post, string accessToken)
-    {
-        _logger.LogInformation("Publicando en TikTok (requiere video)...");
-
-        // TikTok solo permite publicar videos, no texto
-        _logger.LogWarning("TikTok requiere contenido de video. Publicacion de solo texto no soportada.");
-
-        return $"tt_video_required_{Guid.NewGuid():N}";
-    }
-
-    #endregion
-
-    #region YouTube
-
-    private async Task<string> PublishToYouTubeAsync(AdaptedPost post, string accessToken)
-    {
-        _logger.LogInformation("Publicando en YouTube (requiere video)...");
-
-        // YouTube solo permite publicar videos
-        _logger.LogWarning("YouTube requiere contenido de video. Publicacion de solo texto no soportada.");
-
-        return $"yt_video_required_{Guid.NewGuid():N}";
-    }
-
-    #endregion
-
-    #region Response Models
-
-    private class TwitterTweetResponse
-    {
-        [JsonPropertyName("data")]
-        public TwitterTweetData? Data { get; set; }
-    }
-
-    private class TwitterTweetData
-    {
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
-
-        [JsonPropertyName("text")]
-        public string? Text { get; set; }
-    }
-
-    private class FacebookPagesResponse
-    {
-        [JsonPropertyName("data")]
-        public List<FacebookPage>? Data { get; set; }
-    }
-
-    private class FacebookPage
-    {
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
-
-        [JsonPropertyName("name")]
-        public string? Name { get; set; }
-
-        [JsonPropertyName("access_token")]
-        public string? AccessToken { get; set; }
-    }
-
-    private class FacebookPostResponse
-    {
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
-    }
-
-    private class InstagramAccountData
-    {
-        [JsonPropertyName("instagram_business_account")]
-        public InstagramBusinessAccount? InstagramBusinessAccount { get; set; }
-    }
-
-    private class InstagramBusinessAccount
-    {
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
-    }
+    #region Response Models para LinkedIn
 
     private class LinkedInUserInfo
     {

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using MudBlazor.Services;
+using Refit;
 using Serilog;
 using SocialPanelCore.Infrastructure.Services;
 using SocialPanelCore.Components;
@@ -12,6 +13,10 @@ using SocialPanelCore.Domain.Interfaces;
 using SocialPanelCore.Infrastructure.Data;
 using SocialPanelCore.Domain.Entities;
 using SocialPanelCore.Hangfire;
+using SocialPanelCore.Infrastructure.ExternalApis.X;
+using SocialPanelCore.Infrastructure.ExternalApis.Meta;
+using SocialPanelCore.Infrastructure.ExternalApis.TikTok;
+using SocialPanelCore.Infrastructure.ExternalApis.YouTube;
 using Hangfire;
 using Hangfire.PostgreSql;
 
@@ -105,6 +110,19 @@ try
     // Servicios de IA y publicacion inmediata (Sprint 4)
     builder.Services.AddScoped<IAiContentService, AiContentService>();
     builder.Services.AddScoped<IImmediatePublishService, ImmediatePublishService>();
+
+    // Sprint 5: Configurar clientes Refit para APIs externas
+    builder.Services.AddRefitClient<IXApiClient>()
+        .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.x.com"));
+
+    builder.Services.AddRefitClient<IMetaGraphApiClient>()
+        .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://graph.facebook.com/v18.0"));
+
+    builder.Services.AddRefitClient<ITikTokApiClient>()
+        .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://open.tiktokapis.com"));
+
+    // Sprint 5: Servicio de YouTube con SDK oficial de Google
+    builder.Services.AddScoped<YouTubeApiService>();
 
     // Configurar Hangfire con PostgreSQL para trabajos en background
     builder.Services.AddHangfire(config =>
