@@ -19,6 +19,7 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
     public DbSet<AdaptedPost> AdaptedPosts => Set<AdaptedPost>();
     public DbSet<PostMedia> PostMedia => Set<PostMedia>();
     public DbSet<UserAccountAccess> UserAccountAccess => Set<UserAccountAccess>();
+    public DbSet<OAuthState> OAuthStates => Set<OAuthState>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -137,6 +138,35 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
 
             // Índice para búsqueda por post
             entity.HasIndex(pm => pm.BasePostId);
+        });
+
+        // ========== CONFIGURACIÓN DE OAuthState ==========
+        builder.Entity<OAuthState>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.State)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            entity.Property(e => e.RedirectUri)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(e => e.ReturnUrl)
+                .HasMaxLength(500);
+
+            entity.Property(e => e.CodeVerifier)
+                .HasMaxLength(200);
+
+            entity.Property(e => e.RequestedScopes)
+                .HasMaxLength(500);
+
+            // Índice único en State para búsquedas rápidas
+            entity.HasIndex(e => e.State).IsUnique();
+
+            // Índice para limpieza de estados expirados
+            entity.HasIndex(e => e.ExpiresAt);
         });
     }
 }
