@@ -7,6 +7,7 @@
 @inject IAccountService AccountService
 @inject IBasePostService BasePostService
 @inject IMediaStorageService MediaStorageService
+@inject IImmediatePublishService ImmediatePublishService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -57,11 +58,31 @@
                                   Counter="5000"
                                   Immediate="true"
                                   Class="mt-4"
-                                  HelperText="Este texto será adaptado automáticamente para cada red social" />
+                                  HelperText="Este texto sera adaptado automaticamente para cada red social" />
+
+                    <MudCheckBox @bind-Value="_model.AiOptimizationEnabled"
+                                 Label="Optimizar contenido con IA"
+                                 Color="Color.Secondary"
+                                 Class="mt-4" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-8 mb-2">
+                        Si esta activado, el contenido sera adaptado usando IA para cada red social
+                    </MudText>
 
                     <MudCheckBox @bind-Value="_model.ScheduleNow"
-                                 Label="Publicar inmediatamente (las variantes se generarán en segundo plano)"
+                                 Label="Publicar inmediatamente"
                                  Class="mt-4" />
+                    @if (_model.ScheduleNow && _model.AiOptimizationEnabled)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Info" Class="ml-8">
+                            Se mostrara un preview del contenido adaptado antes de publicar
+                        </MudText>
+                    }
+                    else if (_model.ScheduleNow)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-8">
+                            El contenido se publicara directamente sin adaptacion
+                        </MudText>
+                    }
 
                     @if (!_model.ScheduleNow)
                     {
@@ -420,22 +441,29 @@
             var selectedNetworks = _selectedNetworks.Where(x => x.Value).Select(x => x.Key).ToList();
             var userId = await GetCurrentUserIdAsync();
 
-            // Determinar fecha de publicación
+            // Determinar fecha de publicacion y estado inicial
             DateTime scheduledDate;
+            BasePostState initialState;
+
             if (_model.ScheduleNow)
             {
                 scheduledDate = DateTime.UtcNow;
-            }
-            else if (_model.ScheduledDate.HasValue && _model.ScheduledTime.HasValue)
-            {
-                scheduledDate = _model.ScheduledDate.Value.Date + _model.ScheduledTime.Value;
+                // Con IA: ir al preview primero
+                // Sin IA: publicar directamente
+                initialState = _model.AiOptimizationEnabled
+                    ? BasePostState.AdaptacionPendiente
+                    : BasePostState.Planificada;
             }
             else
             {
-                scheduledDate = DateTime.UtcNow;
+                // Programada: siempre Planificada, Hangfire procesara despues
+                scheduledDate = _model.ScheduledDate.HasValue && _model.ScheduledTime.HasValue
+                    ? _model.ScheduledDate.Value.Date + _model.ScheduledTime.Value
+                    : DateTime.UtcNow;
+                initialState = BasePostState.Planificada;
             }
 
-            // Crear publicación con estado Planificada
+            // Crear publicacion
             var post = await BasePostService.CreatePostAsync(
                 _model.AccountId,
                 userId,
@@ -443,7 +471,7 @@
                 scheduledDate,
                 selectedNetworks,
                 _model.Title,
-                BasePostState.Planificada
+                initialState
             );
 
             // Guardar medios si hay archivos subidos
@@ -451,8 +479,6 @@
             {
                 var account = _accounts.FirstOrDefault(a => a.Id == _model.AccountId);
                 var accountName = account?.Name ?? "default";
-
-                // Guardar para la primera red seleccionada (los medios son compartidos)
                 var primaryNetwork = selectedNetworks.First();
 
                 try
@@ -464,28 +490,39 @@
                         primaryNetwork,
                         _model.Title ?? "publicacion"
                     );
-
-                    Snackbar.Add(
-                        $"Publicación creada con {_uploadedFiles.Count} archivo(s) adjunto(s)",
-                        Severity.Success);
                 }
                 catch (Exception ex)
                 {
-                    Snackbar.Add(
-                        $"Publicación creada pero hubo error con algunos archivos: {ex.Message}",
-                        Severity.Warning);
+                    Snackbar.Add($"Error guardando algunos archivos: {ex.Message}", Severity.Warning);
                 }
+            }
+
+            // Decidir redireccion segun el flujo
+            if (_model.ScheduleNow && _model.AiOptimizationEnabled)
+            {
+                // Ir al preview para publicacion inmediata con IA
+                Navigation.NavigateTo($"/publications/preview/{post.Id}");
+            }
+            else if (_model.ScheduleNow && !_model.AiOptimizationEnabled)
+            {
+                // Publicar directamente sin IA
+                var result = await ImmediatePublishService.PublishDirectlyAsync(post.Id);
+                if (result.OverallSuccess)
+                {
+                    Snackbar.Add("Publicacion completada exitosamente", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add(result.OverallMessage ?? "Publicacion parcial", Severity.Warning);
+                }
+                Navigation.NavigateTo($"/publications/view/{post.Id}");
             }
             else
             {
-                Snackbar.Add(
-                    _model.ScheduleNow
-                        ? "Publicación creada. Las variantes se generarán automáticamente."
-                        : "Publicación programada exitosamente",
-                    Severity.Success);
+                // Programada: ir al listado
+                Snackbar.Add("Publicacion programada exitosamente", Severity.Success);
+                Navigation.NavigateTo("/publications");
             }
-
-            Navigation.NavigateTo("/publications");
         }
         catch (Exception ex)
         {
@@ -522,6 +559,7 @@
         public string Title { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
         public bool ScheduleNow { get; set; } = true;
+        public bool AiOptimizationEnabled { get; set; } = true;
         public DateTime? ScheduledDate { get; set; }
         public TimeSpan? ScheduledTime { get; set; }
     }

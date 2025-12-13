@@ -1,0 +1,308 @@
+@page "/publications/preview/{Id:guid}"
+@rendermode InteractiveServer
+@using SocialPanelCore.Domain.Interfaces
+@using SocialPanelCore.Domain.Entities
+@using SocialPanelCore.Domain.Enums
+@inject IBasePostService BasePostService
+@inject IImmediatePublishService ImmediatePublishService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Preview de Publicacion</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Color="Color.Primary" Indeterminate="true" />
+    <MudText Typo="Typo.body1" Class="mt-4">Generando adaptaciones con IA...</MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary">Esto puede tardar unos segundos</MudText>
+}
+else if (_post == null)
+{
+    <MudAlert Severity="Severity.Error">Publicacion no encontrada</MudAlert>
+}
+else
+{
+    <MudText Typo="Typo.h4" Class="mb-2">Preview de Publicacion</MudText>
+    <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-4">
+        Revisa y edita el contenido adaptado antes de publicar
+    </MudText>
+
+    <MudGrid>
+        <!-- Panel de previews -->
+        <MudItem xs="12" md="8">
+            <MudText Typo="Typo.h6" Class="mb-2">Contenido por Red Social</MudText>
+
+            @foreach (var preview in _previews.Values)
+            {
+                <MudCard Elevation="2" Class="mb-4">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <div class="d-flex align-center">
+                                <MudChip T="string" Color="Color.Primary" Size="Size.Small" Class="mr-2">
+                                    @GetNetworkName(preview.NetworkType)
+                                </MudChip>
+                                @if (preview.UsedAi)
+                                {
+                                    <MudChip T="string" Color="Color.Secondary" Size="Size.Small" Variant="Variant.Outlined">
+                                        Optimizado con IA
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Outlined">
+                                        Contenido original
+                                    </MudChip>
+                                }
+                                @if (preview.IncludeMedia && _hasMedia)
+                                {
+                                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Outlined" Class="ml-2">
+                                        Con medios
+                                    </MudChip>
+                                }
+                            </div>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudText Typo="Typo.caption">
+                                @_editedContent[preview.NetworkType].Length / @GetMaxChars(preview.NetworkType) caracteres
+                            </MudText>
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudTextField @bind-Value="_editedContent[preview.NetworkType]"
+                                      Label="Contenido"
+                                      Lines="4"
+                                      Variant="Variant.Outlined"
+                                      HelperText="@GetHelperText(preview.NetworkType)"
+                                      Counter="@GetMaxChars(preview.NetworkType)"
+                                      Immediate="true" />
+
+                        @if (preview.UsedAi && _editedContent[preview.NetworkType] != preview.AdaptedContent)
+                        {
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Secondary"
+                                       Size="Size.Small"
+                                       OnClick="@(() => ResetToOriginal(preview.NetworkType))"
+                                       Class="mt-2">
+                                Restaurar version IA
+                            </MudButton>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudItem>
+
+        <!-- Panel lateral -->
+        <MudItem xs="12" md="4">
+            <!-- Contenido original -->
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Contenido Original</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudText Typo="Typo.body2" Style="white-space: pre-wrap; max-height: 200px; overflow-y: auto;">
+                        @_post.Content
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Acciones -->
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudStack Spacing="2">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Success"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Send"
+                                   OnClick="PublishNow"
+                                   Disabled="@_publishing">
+                            @if (_publishing)
+                            {
+                                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                                <MudText Class="ms-2">Publicando...</MudText>
+                            }
+                            else
+                            {
+                                <span>Publicar Ahora</span>
+                            }
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Warning"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Schedule"
+                                   OnClick="SaveAsScheduled"
+                                   Disabled="@_publishing">
+                            Guardar como Programada
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Default"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Cancel"
+                                   OnClick="Cancel"
+                                   Disabled="@_publishing">
+                            Cancelar
+                        </MudButton>
+                    </MudStack>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private BasePost? _post;
+    private Dictionary<NetworkType, AdaptedContentPreview> _previews = new();
+    private Dictionary<NetworkType, string> _editedContent = new();
+    private bool _loading = true;
+    private bool _publishing;
+    private bool _hasMedia;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreview();
+    }
+
+    private async Task LoadPreview()
+    {
+        _loading = true;
+        try
+        {
+            _post = await BasePostService.GetPostByIdAsync(Id);
+            if (_post == null)
+            {
+                Snackbar.Add("Publicacion no encontrada", Severity.Error);
+                return;
+            }
+
+            _hasMedia = _post.Media?.Any() == true;
+
+            // Generar previews
+            _previews = await ImmediatePublishService.GeneratePreviewsAsync(Id);
+
+            // Inicializar contenido editable
+            foreach (var preview in _previews)
+            {
+                _editedContent[preview.Key] = preview.Value.AdaptedContent;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error generando preview: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetToOriginal(NetworkType network)
+    {
+        if (_previews.TryGetValue(network, out var preview))
+        {
+            _editedContent[network] = preview.AdaptedContent;
+        }
+    }
+
+    private async Task PublishNow()
+    {
+        _publishing = true;
+        try
+        {
+            var result = await ImmediatePublishService.PublishAfterPreviewAsync(Id, _editedContent);
+
+            if (result.OverallSuccess)
+            {
+                Snackbar.Add("Publicacion completada exitosamente", Severity.Success);
+                Navigation.NavigateTo($"/publications/view/{Id}");
+            }
+            else
+            {
+                var successCount = result.NetworkResults.Count(r => r.Value.Success);
+                var totalCount = result.NetworkResults.Count;
+
+                if (successCount > 0)
+                {
+                    Snackbar.Add($"Publicado en {successCount} de {totalCount} redes", Severity.Warning);
+                }
+                else
+                {
+                    Snackbar.Add("Error: No se pudo publicar en ninguna red", Severity.Error);
+                }
+
+                // Mostrar errores especificos
+                foreach (var (network, networkResult) in result.NetworkResults.Where(r => !r.Value.Success))
+                {
+                    Snackbar.Add($"{network}: {networkResult.ErrorMessage}", Severity.Error);
+                }
+
+                Navigation.NavigateTo($"/publications/view/{Id}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _publishing = false;
+        }
+    }
+
+    private async Task SaveAsScheduled()
+    {
+        try
+        {
+            // Cambiar el estado a Planificada y guardar los AdaptedPosts
+            await BasePostService.ChangeStateAsync(Id, BasePostState.Planificada);
+
+            Snackbar.Add("Publicacion guardada como programada", Severity.Success);
+            Navigation.NavigateTo("/publications");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/publications");
+    }
+
+    private string GetNetworkName(NetworkType network) => network switch
+    {
+        NetworkType.Facebook => "Facebook",
+        NetworkType.Instagram => "Instagram",
+        NetworkType.TikTok => "TikTok",
+        NetworkType.X => "X (Twitter)",
+        NetworkType.YouTube => "YouTube",
+        NetworkType.LinkedIn => "LinkedIn",
+        _ => network.ToString()
+    };
+
+    private int GetMaxChars(NetworkType network) => network switch
+    {
+        NetworkType.X => 280,
+        NetworkType.TikTok => 150,
+        NetworkType.Instagram => 2200,
+        NetworkType.LinkedIn => 3000,
+        NetworkType.Facebook => 63206,
+        NetworkType.YouTube => 5000,
+        _ => 5000
+    };
+
+    private string GetHelperText(NetworkType network) => network switch
+    {
+        NetworkType.X => "Maximo 280 caracteres",
+        NetworkType.TikTok => "Maximo 150 caracteres",
+        NetworkType.Instagram => "Ideal 125-150 caracteres para feed",
+        NetworkType.LinkedIn => "Ideal menos de 700 caracteres",
+        _ => ""
+    };
+}
