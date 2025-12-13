@@ -25,7 +25,10 @@ public class OAuthService : IOAuthService
     {
         [NetworkType.Facebook] = "pages_manage_posts,pages_read_engagement,pages_show_list,public_profile",
         [NetworkType.Instagram] = "instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish",
-        [NetworkType.X] = "tweet.read,tweet.write,users.read,offline.access"
+        [NetworkType.X] = "tweet.read,tweet.write,users.read,offline.access",
+        [NetworkType.LinkedIn] = "openid,profile,w_member_social",
+        [NetworkType.TikTok] = "user.info.basic,video.publish,video.upload",
+        [NetworkType.YouTube] = "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/userinfo.profile"
     };
 
     public OAuthService(
@@ -40,8 +43,8 @@ public class OAuthService : IOAuthService
 
     public bool RequiresPkce(NetworkType networkType)
     {
-        // X (Twitter) requiere PKCE obligatoriamente
-        return networkType == NetworkType.X;
+        // X (Twitter) y TikTok requieren PKCE obligatoriamente
+        return networkType == NetworkType.X || networkType == NetworkType.TikTok;
     }
 
     public string GetDefaultScopes(NetworkType networkType)
@@ -56,6 +59,9 @@ public class OAuthService : IOAuthService
             NetworkType.Facebook => GetFacebookAuthUrl(state, redirectUri),
             NetworkType.Instagram => GetInstagramAuthUrl(state, redirectUri),
             NetworkType.X => GetXAuthUrl(state, redirectUri, codeChallenge),
+            NetworkType.LinkedIn => GetLinkedInAuthUrl(state, redirectUri),
+            NetworkType.TikTok => GetTikTokAuthUrl(state, redirectUri, codeChallenge),
+            NetworkType.YouTube => GetYouTubeAuthUrl(state, redirectUri),
             _ => throw new NotSupportedException($"OAuth no soportado para {networkType}")
         };
     }
@@ -73,6 +79,9 @@ public class OAuthService : IOAuthService
                 NetworkType.Facebook => await ExchangeFacebookCodeAsync(code, redirectUri),
                 NetworkType.Instagram => await ExchangeInstagramCodeAsync(code, redirectUri),
                 NetworkType.X => await ExchangeXCodeAsync(code, redirectUri, codeVerifier),
+                NetworkType.LinkedIn => await ExchangeLinkedInCodeAsync(code, redirectUri),
+                NetworkType.TikTok => await ExchangeTikTokCodeAsync(code, redirectUri, codeVerifier),
+                NetworkType.YouTube => await ExchangeYouTubeCodeAsync(code, redirectUri),
                 _ => new OAuthTokenResult { Success = false, Error = $"OAuth no soportado para {networkType}" }
             };
         }
@@ -97,6 +106,9 @@ public class OAuthService : IOAuthService
                 NetworkType.Facebook => await RefreshFacebookTokenAsync(refreshToken),
                 NetworkType.Instagram => await RefreshInstagramTokenAsync(refreshToken),
                 NetworkType.X => await RefreshXTokenAsync(refreshToken),
+                NetworkType.LinkedIn => await RefreshLinkedInTokenAsync(refreshToken),
+                NetworkType.TikTok => await RefreshTikTokTokenAsync(refreshToken),
+                NetworkType.YouTube => await RefreshYouTubeTokenAsync(refreshToken),
                 _ => new OAuthTokenResult { Success = false, Error = $"Refresh no soportado para {networkType}" }
             };
         }
@@ -121,6 +133,9 @@ public class OAuthService : IOAuthService
                 NetworkType.Facebook => await GetFacebookUserInfoAsync(accessToken),
                 NetworkType.Instagram => await GetInstagramUserInfoAsync(accessToken),
                 NetworkType.X => await GetXUserInfoAsync(accessToken),
+                NetworkType.LinkedIn => await GetLinkedInUserInfoAsync(accessToken),
+                NetworkType.TikTok => await GetTikTokUserInfoAsync(accessToken),
+                NetworkType.YouTube => await GetYouTubeUserInfoAsync(accessToken),
                 _ => null
             };
         }
@@ -138,7 +153,9 @@ public class OAuthService : IOAuthService
             return networkType switch
             {
                 NetworkType.X => await RevokeXTokenAsync(accessToken),
-                // Facebook/Instagram no tienen endpoint de revoke directo,
+                NetworkType.YouTube => await RevokeYouTubeTokenAsync(accessToken),
+                NetworkType.TikTok => await RevokeTikTokTokenAsync(accessToken),
+                // Facebook/Instagram/LinkedIn no tienen endpoint de revoke directo,
                 // se hace desde la configuración de la app del usuario
                 _ => false
             };
@@ -612,6 +629,451 @@ public class OAuthService : IOAuthService
 
     #endregion
 
+    #region LinkedIn
+
+    private string GetLinkedInAuthUrl(string state, string redirectUri)
+    {
+        var clientId = _configuration["OAuth:LinkedIn:ClientId"];
+        var scopes = DefaultScopes[NetworkType.LinkedIn];
+
+        // LinkedIn OAuth 2.0 (OpenID Connect)
+        return $"https://www.linkedin.com/oauth/v2/authorization" +
+               $"?client_id={clientId}" +
+               $"&redirect_uri={HttpUtility.UrlEncode(redirectUri)}" +
+               $"&scope={HttpUtility.UrlEncode(scopes)}" +
+               $"&state={HttpUtility.UrlEncode(state)}" +
+               $"&response_type=code";
+    }
+
+    private async Task<OAuthTokenResult> ExchangeLinkedInCodeAsync(string code, string redirectUri)
+    {
+        var clientId = _configuration["OAuth:LinkedIn:ClientId"];
+        var clientSecret = _configuration["OAuth:LinkedIn:ClientSecret"];
+
+        using var client = _httpClientFactory.CreateClient();
+
+        var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "authorization_code",
+            ["code"] = code,
+            ["client_id"] = clientId!,
+            ["client_secret"] = clientSecret!,
+            ["redirect_uri"] = redirectUri
+        });
+
+        var response = await client.PostAsync("https://www.linkedin.com/oauth/v2/accessToken", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Error en LinkedIn OAuth: {Content}", responseContent);
+            var errorResponse = JsonSerializer.Deserialize<LinkedInErrorResponse>(responseContent);
+            return new OAuthTokenResult
+            {
+                Success = false,
+                Error = errorResponse?.Error ?? "linkedin_error",
+                ErrorDescription = errorResponse?.ErrorDescription ?? responseContent
+            };
+        }
+
+        var tokenResponse = JsonSerializer.Deserialize<LinkedInTokenResponse>(responseContent);
+
+        return new OAuthTokenResult
+        {
+            Success = true,
+            AccessToken = tokenResponse?.AccessToken,
+            RefreshToken = tokenResponse?.RefreshToken,
+            ExpiresAt = tokenResponse?.ExpiresIn > 0
+                ? DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn)
+                : DateTime.UtcNow.AddDays(60), // LinkedIn tokens duran ~60 días
+            Scopes = DefaultScopes[NetworkType.LinkedIn]
+        };
+    }
+
+    private async Task<OAuthTokenResult> RefreshLinkedInTokenAsync(string refreshToken)
+    {
+        var clientId = _configuration["OAuth:LinkedIn:ClientId"];
+        var clientSecret = _configuration["OAuth:LinkedIn:ClientSecret"];
+
+        using var client = _httpClientFactory.CreateClient();
+
+        var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = refreshToken,
+            ["client_id"] = clientId!,
+            ["client_secret"] = clientSecret!
+        });
+
+        var response = await client.PostAsync("https://www.linkedin.com/oauth/v2/accessToken", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Error refrescando token LinkedIn: {Content}", responseContent);
+            var errorResponse = JsonSerializer.Deserialize<LinkedInErrorResponse>(responseContent);
+            return new OAuthTokenResult
+            {
+                Success = false,
+                Error = errorResponse?.Error ?? "refresh_error",
+                ErrorDescription = errorResponse?.ErrorDescription ?? responseContent
+            };
+        }
+
+        var tokenResponse = JsonSerializer.Deserialize<LinkedInTokenResponse>(responseContent);
+
+        return new OAuthTokenResult
+        {
+            Success = true,
+            AccessToken = tokenResponse?.AccessToken,
+            RefreshToken = tokenResponse?.RefreshToken ?? refreshToken,
+            ExpiresAt = tokenResponse?.ExpiresIn > 0
+                ? DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn)
+                : DateTime.UtcNow.AddDays(60)
+        };
+    }
+
+    private async Task<OAuthUserInfo?> GetLinkedInUserInfoAsync(string accessToken)
+    {
+        using var client = _httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        // LinkedIn API v2 - userinfo endpoint (OpenID Connect)
+        var response = await client.GetAsync("https://api.linkedin.com/v2/userinfo");
+        if (!response.IsSuccessStatusCode) return null;
+
+        var user = await response.Content.ReadFromJsonAsync<LinkedInUserInfoResponse>();
+        return new OAuthUserInfo
+        {
+            Id = user?.Sub,
+            DisplayName = user?.Name,
+            Username = user?.Email ?? user?.Name,
+            ProfileImageUrl = user?.Picture
+        };
+    }
+
+    #endregion
+
+    #region TikTok
+
+    private string GetTikTokAuthUrl(string state, string redirectUri, string? codeChallenge)
+    {
+        var clientKey = _configuration["OAuth:TikTok:ClientKey"];
+        var scopes = DefaultScopes[NetworkType.TikTok];
+
+        if (string.IsNullOrEmpty(codeChallenge))
+            throw new ArgumentException("TikTok requiere PKCE. Proporciona codeChallenge.", nameof(codeChallenge));
+
+        // TikTok Login Kit v2 con PKCE
+        return $"https://www.tiktok.com/v2/auth/authorize/" +
+               $"?client_key={clientKey}" +
+               $"&redirect_uri={HttpUtility.UrlEncode(redirectUri)}" +
+               $"&scope={HttpUtility.UrlEncode(scopes)}" +
+               $"&state={HttpUtility.UrlEncode(state)}" +
+               $"&response_type=code" +
+               $"&code_challenge={HttpUtility.UrlEncode(codeChallenge)}" +
+               $"&code_challenge_method=S256";
+    }
+
+    private async Task<OAuthTokenResult> ExchangeTikTokCodeAsync(string code, string redirectUri, string? codeVerifier)
+    {
+        if (string.IsNullOrEmpty(codeVerifier))
+        {
+            return new OAuthTokenResult
+            {
+                Success = false,
+                Error = "pkce_required",
+                ErrorDescription = "TikTok requiere code_verifier para PKCE"
+            };
+        }
+
+        var clientKey = _configuration["OAuth:TikTok:ClientKey"];
+        var clientSecret = _configuration["OAuth:TikTok:ClientSecret"];
+
+        using var client = _httpClientFactory.CreateClient();
+
+        var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["client_key"] = clientKey!,
+            ["client_secret"] = clientSecret!,
+            ["code"] = code,
+            ["grant_type"] = "authorization_code",
+            ["redirect_uri"] = redirectUri,
+            ["code_verifier"] = codeVerifier
+        });
+
+        var response = await client.PostAsync("https://open.tiktokapis.com/v2/oauth/token/", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Error en TikTok OAuth: {Content}", responseContent);
+            var errorResponse = JsonSerializer.Deserialize<TikTokErrorResponse>(responseContent);
+            return new OAuthTokenResult
+            {
+                Success = false,
+                Error = errorResponse?.Error ?? "tiktok_error",
+                ErrorDescription = errorResponse?.ErrorDescription ?? responseContent
+            };
+        }
+
+        var tokenResponse = JsonSerializer.Deserialize<TikTokTokenResponse>(responseContent);
+
+        return new OAuthTokenResult
+        {
+            Success = true,
+            AccessToken = tokenResponse?.AccessToken,
+            RefreshToken = tokenResponse?.RefreshToken,
+            ExpiresAt = tokenResponse?.ExpiresIn > 0
+                ? DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn)
+                : DateTime.UtcNow.AddDays(1), // TikTok access tokens duran 24h
+            RefreshTokenExpiresAt = tokenResponse?.RefreshExpiresIn > 0
+                ? DateTime.UtcNow.AddSeconds(tokenResponse.RefreshExpiresIn)
+                : DateTime.UtcNow.AddDays(365), // Refresh tokens duran ~1 año
+            Scopes = tokenResponse?.Scope ?? DefaultScopes[NetworkType.TikTok]
+        };
+    }
+
+    private async Task<OAuthTokenResult> RefreshTikTokTokenAsync(string refreshToken)
+    {
+        var clientKey = _configuration["OAuth:TikTok:ClientKey"];
+        var clientSecret = _configuration["OAuth:TikTok:ClientSecret"];
+
+        using var client = _httpClientFactory.CreateClient();
+
+        var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["client_key"] = clientKey!,
+            ["client_secret"] = clientSecret!,
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = refreshToken
+        });
+
+        var response = await client.PostAsync("https://open.tiktokapis.com/v2/oauth/token/", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Error refrescando token TikTok: {Content}", responseContent);
+            var errorResponse = JsonSerializer.Deserialize<TikTokErrorResponse>(responseContent);
+            return new OAuthTokenResult
+            {
+                Success = false,
+                Error = errorResponse?.Error ?? "refresh_error",
+                ErrorDescription = errorResponse?.ErrorDescription ?? responseContent
+            };
+        }
+
+        var tokenResponse = JsonSerializer.Deserialize<TikTokTokenResponse>(responseContent);
+
+        return new OAuthTokenResult
+        {
+            Success = true,
+            AccessToken = tokenResponse?.AccessToken,
+            RefreshToken = tokenResponse?.RefreshToken ?? refreshToken,
+            ExpiresAt = tokenResponse?.ExpiresIn > 0
+                ? DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn)
+                : DateTime.UtcNow.AddDays(1),
+            RefreshTokenExpiresAt = tokenResponse?.RefreshExpiresIn > 0
+                ? DateTime.UtcNow.AddSeconds(tokenResponse.RefreshExpiresIn)
+                : null
+        };
+    }
+
+    private async Task<OAuthUserInfo?> GetTikTokUserInfoAsync(string accessToken)
+    {
+        using var client = _httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        // TikTok API v2 - user info
+        var response = await client.GetAsync("https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url,username");
+        if (!response.IsSuccessStatusCode) return null;
+
+        var result = await response.Content.ReadFromJsonAsync<TikTokUserResponse>();
+        return new OAuthUserInfo
+        {
+            Id = result?.Data?.User?.OpenId,
+            DisplayName = result?.Data?.User?.DisplayName,
+            Username = result?.Data?.User?.Username,
+            ProfileImageUrl = result?.Data?.User?.AvatarUrl
+        };
+    }
+
+    private async Task<bool> RevokeTikTokTokenAsync(string accessToken)
+    {
+        var clientKey = _configuration["OAuth:TikTok:ClientKey"];
+        var clientSecret = _configuration["OAuth:TikTok:ClientSecret"];
+
+        using var client = _httpClientFactory.CreateClient();
+
+        var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["client_key"] = clientKey!,
+            ["client_secret"] = clientSecret!,
+            ["token"] = accessToken
+        });
+
+        var response = await client.PostAsync("https://open.tiktokapis.com/v2/oauth/revoke/", content);
+        return response.IsSuccessStatusCode;
+    }
+
+    #endregion
+
+    #region YouTube (Google)
+
+    private string GetYouTubeAuthUrl(string state, string redirectUri)
+    {
+        var clientId = _configuration["OAuth:YouTube:ClientId"];
+        var scopes = DefaultScopes[NetworkType.YouTube];
+
+        // Google OAuth 2.0
+        return $"https://accounts.google.com/o/oauth2/v2/auth" +
+               $"?client_id={clientId}" +
+               $"&redirect_uri={HttpUtility.UrlEncode(redirectUri)}" +
+               $"&scope={HttpUtility.UrlEncode(scopes)}" +
+               $"&state={HttpUtility.UrlEncode(state)}" +
+               $"&response_type=code" +
+               $"&access_type=offline" +
+               $"&prompt=consent"; // Forzar consent para obtener refresh_token
+    }
+
+    private async Task<OAuthTokenResult> ExchangeYouTubeCodeAsync(string code, string redirectUri)
+    {
+        var clientId = _configuration["OAuth:YouTube:ClientId"];
+        var clientSecret = _configuration["OAuth:YouTube:ClientSecret"];
+
+        using var client = _httpClientFactory.CreateClient();
+
+        var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "authorization_code",
+            ["code"] = code,
+            ["client_id"] = clientId!,
+            ["client_secret"] = clientSecret!,
+            ["redirect_uri"] = redirectUri
+        });
+
+        var response = await client.PostAsync("https://oauth2.googleapis.com/token", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Error en YouTube/Google OAuth: {Content}", responseContent);
+            var errorResponse = JsonSerializer.Deserialize<GoogleErrorResponse>(responseContent);
+            return new OAuthTokenResult
+            {
+                Success = false,
+                Error = errorResponse?.Error ?? "youtube_error",
+                ErrorDescription = errorResponse?.ErrorDescription ?? responseContent
+            };
+        }
+
+        var tokenResponse = JsonSerializer.Deserialize<GoogleTokenResponse>(responseContent);
+
+        return new OAuthTokenResult
+        {
+            Success = true,
+            AccessToken = tokenResponse?.AccessToken,
+            RefreshToken = tokenResponse?.RefreshToken,
+            ExpiresAt = tokenResponse?.ExpiresIn > 0
+                ? DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn)
+                : DateTime.UtcNow.AddHours(1), // Google tokens duran ~1 hora
+            Scopes = tokenResponse?.Scope ?? DefaultScopes[NetworkType.YouTube]
+        };
+    }
+
+    private async Task<OAuthTokenResult> RefreshYouTubeTokenAsync(string refreshToken)
+    {
+        var clientId = _configuration["OAuth:YouTube:ClientId"];
+        var clientSecret = _configuration["OAuth:YouTube:ClientSecret"];
+
+        using var client = _httpClientFactory.CreateClient();
+
+        var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = refreshToken,
+            ["client_id"] = clientId!,
+            ["client_secret"] = clientSecret!
+        });
+
+        var response = await client.PostAsync("https://oauth2.googleapis.com/token", content);
+        var responseContent = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("Error refrescando token YouTube/Google: {Content}", responseContent);
+            var errorResponse = JsonSerializer.Deserialize<GoogleErrorResponse>(responseContent);
+            return new OAuthTokenResult
+            {
+                Success = false,
+                Error = errorResponse?.Error ?? "refresh_error",
+                ErrorDescription = errorResponse?.ErrorDescription ?? responseContent
+            };
+        }
+
+        var tokenResponse = JsonSerializer.Deserialize<GoogleTokenResponse>(responseContent);
+
+        return new OAuthTokenResult
+        {
+            Success = true,
+            AccessToken = tokenResponse?.AccessToken,
+            RefreshToken = refreshToken, // Google no devuelve nuevo refresh_token en refresh
+            ExpiresAt = tokenResponse?.ExpiresIn > 0
+                ? DateTime.UtcNow.AddSeconds(tokenResponse.ExpiresIn)
+                : DateTime.UtcNow.AddHours(1)
+        };
+    }
+
+    private async Task<OAuthUserInfo?> GetYouTubeUserInfoAsync(string accessToken)
+    {
+        using var client = _httpClientFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        // Primero obtenemos info del usuario de Google
+        var userInfoResponse = await client.GetAsync("https://www.googleapis.com/oauth2/v2/userinfo");
+        if (!userInfoResponse.IsSuccessStatusCode) return null;
+
+        var userInfo = await userInfoResponse.Content.ReadFromJsonAsync<GoogleUserInfoResponse>();
+
+        // Luego obtenemos el canal de YouTube
+        var channelResponse = await client.GetAsync("https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true");
+        string? channelId = null;
+        string? channelTitle = null;
+
+        if (channelResponse.IsSuccessStatusCode)
+        {
+            var channelData = await channelResponse.Content.ReadFromJsonAsync<YouTubeChannelResponse>();
+            var channel = channelData?.Items?.FirstOrDefault();
+            channelId = channel?.Id;
+            channelTitle = channel?.Snippet?.Title;
+        }
+
+        return new OAuthUserInfo
+        {
+            Id = channelId ?? userInfo?.Id,
+            DisplayName = channelTitle ?? userInfo?.Name,
+            Username = userInfo?.Email,
+            ProfileImageUrl = userInfo?.Picture
+        };
+    }
+
+    private async Task<bool> RevokeYouTubeTokenAsync(string accessToken)
+    {
+        using var client = _httpClientFactory.CreateClient();
+
+        var response = await client.PostAsync(
+            $"https://oauth2.googleapis.com/revoke?token={HttpUtility.UrlEncode(accessToken)}",
+            new StringContent(string.Empty));
+
+        return response.IsSuccessStatusCode;
+    }
+
+    #endregion
+
     #region Response Models
 
     private class FacebookTokenResponse
@@ -738,6 +1200,216 @@ public class OAuthService : IOAuthService
 
         [JsonPropertyName("profile_image_url")]
         public string? ProfileImageUrl { get; set; }
+    }
+
+    // LinkedIn Response Models
+    private class LinkedInTokenResponse
+    {
+        [JsonPropertyName("access_token")]
+        public string? AccessToken { get; set; }
+
+        [JsonPropertyName("refresh_token")]
+        public string? RefreshToken { get; set; }
+
+        [JsonPropertyName("expires_in")]
+        public int ExpiresIn { get; set; }
+
+        [JsonPropertyName("refresh_token_expires_in")]
+        public int RefreshTokenExpiresIn { get; set; }
+
+        [JsonPropertyName("scope")]
+        public string? Scope { get; set; }
+
+        [JsonPropertyName("token_type")]
+        public string? TokenType { get; set; }
+    }
+
+    private class LinkedInErrorResponse
+    {
+        [JsonPropertyName("error")]
+        public string? Error { get; set; }
+
+        [JsonPropertyName("error_description")]
+        public string? ErrorDescription { get; set; }
+    }
+
+    private class LinkedInUserInfoResponse
+    {
+        [JsonPropertyName("sub")]
+        public string? Sub { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("given_name")]
+        public string? GivenName { get; set; }
+
+        [JsonPropertyName("family_name")]
+        public string? FamilyName { get; set; }
+
+        [JsonPropertyName("picture")]
+        public string? Picture { get; set; }
+
+        [JsonPropertyName("email")]
+        public string? Email { get; set; }
+
+        [JsonPropertyName("email_verified")]
+        public bool? EmailVerified { get; set; }
+
+        [JsonPropertyName("locale")]
+        public string? Locale { get; set; }
+    }
+
+    // TikTok Response Models
+    private class TikTokTokenResponse
+    {
+        [JsonPropertyName("access_token")]
+        public string? AccessToken { get; set; }
+
+        [JsonPropertyName("refresh_token")]
+        public string? RefreshToken { get; set; }
+
+        [JsonPropertyName("expires_in")]
+        public int ExpiresIn { get; set; }
+
+        [JsonPropertyName("refresh_expires_in")]
+        public int RefreshExpiresIn { get; set; }
+
+        [JsonPropertyName("scope")]
+        public string? Scope { get; set; }
+
+        [JsonPropertyName("token_type")]
+        public string? TokenType { get; set; }
+
+        [JsonPropertyName("open_id")]
+        public string? OpenId { get; set; }
+    }
+
+    private class TikTokErrorResponse
+    {
+        [JsonPropertyName("error")]
+        public string? Error { get; set; }
+
+        [JsonPropertyName("error_description")]
+        public string? ErrorDescription { get; set; }
+    }
+
+    private class TikTokUserResponse
+    {
+        [JsonPropertyName("data")]
+        public TikTokUserData? Data { get; set; }
+    }
+
+    private class TikTokUserData
+    {
+        [JsonPropertyName("user")]
+        public TikTokUser? User { get; set; }
+    }
+
+    private class TikTokUser
+    {
+        [JsonPropertyName("open_id")]
+        public string? OpenId { get; set; }
+
+        [JsonPropertyName("display_name")]
+        public string? DisplayName { get; set; }
+
+        [JsonPropertyName("avatar_url")]
+        public string? AvatarUrl { get; set; }
+
+        [JsonPropertyName("username")]
+        public string? Username { get; set; }
+    }
+
+    // YouTube/Google Response Models
+    private class GoogleTokenResponse
+    {
+        [JsonPropertyName("access_token")]
+        public string? AccessToken { get; set; }
+
+        [JsonPropertyName("refresh_token")]
+        public string? RefreshToken { get; set; }
+
+        [JsonPropertyName("expires_in")]
+        public int ExpiresIn { get; set; }
+
+        [JsonPropertyName("scope")]
+        public string? Scope { get; set; }
+
+        [JsonPropertyName("token_type")]
+        public string? TokenType { get; set; }
+    }
+
+    private class GoogleErrorResponse
+    {
+        [JsonPropertyName("error")]
+        public string? Error { get; set; }
+
+        [JsonPropertyName("error_description")]
+        public string? ErrorDescription { get; set; }
+    }
+
+    private class GoogleUserInfoResponse
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("email")]
+        public string? Email { get; set; }
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("given_name")]
+        public string? GivenName { get; set; }
+
+        [JsonPropertyName("family_name")]
+        public string? FamilyName { get; set; }
+
+        [JsonPropertyName("picture")]
+        public string? Picture { get; set; }
+    }
+
+    private class YouTubeChannelResponse
+    {
+        [JsonPropertyName("items")]
+        public List<YouTubeChannel>? Items { get; set; }
+    }
+
+    private class YouTubeChannel
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("snippet")]
+        public YouTubeChannelSnippet? Snippet { get; set; }
+    }
+
+    private class YouTubeChannelSnippet
+    {
+        [JsonPropertyName("title")]
+        public string? Title { get; set; }
+
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        [JsonPropertyName("customUrl")]
+        public string? CustomUrl { get; set; }
+
+        [JsonPropertyName("thumbnails")]
+        public YouTubeThumbnails? Thumbnails { get; set; }
+    }
+
+    private class YouTubeThumbnails
+    {
+        [JsonPropertyName("default")]
+        public YouTubeThumbnail? Default { get; set; }
+    }
+
+    private class YouTubeThumbnail
+    {
+        [JsonPropertyName("url")]
+        public string? Url { get; set; }
     }
 
     #endregion
