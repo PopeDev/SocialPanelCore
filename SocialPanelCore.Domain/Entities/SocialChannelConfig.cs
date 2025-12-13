@@ -25,9 +25,41 @@ public class SocialChannelConfig
     public string? RefreshToken { get; set; }
 
     /// <summary>
-    /// Fecha de expiración del token OAuth
+    /// Fecha de expiración del access token (UTC)
     /// </summary>
     public DateTime? TokenExpiresAt { get; set; }
+
+    /// <summary>
+    /// Fecha de expiración del refresh token (UTC), si aplica.
+    /// LinkedIn: ~1 año, X con offline.access: variable
+    /// </summary>
+    public DateTime? RefreshTokenExpiresAt { get; set; }
+
+    /// <summary>
+    /// Scopes autorizados por el usuario (comma-separated)
+    /// </summary>
+    public string? Scopes { get; set; }
+
+    // ========== Estado de conexión OAuth ==========
+    /// <summary>
+    /// Estado de la conexión OAuth (Connected, NeedsReauth, Revoked, Error)
+    /// </summary>
+    public ConnectionStatus ConnectionStatus { get; set; } = ConnectionStatus.Connected;
+
+    /// <summary>
+    /// Último intento de refresh de tokens (UTC)
+    /// </summary>
+    public DateTime? LastRefreshAttemptAt { get; set; }
+
+    /// <summary>
+    /// Último refresh exitoso de tokens (UTC)
+    /// </summary>
+    public DateTime? LastRefreshSuccessAt { get; set; }
+
+    /// <summary>
+    /// Código del último error OAuth (ej: invalid_grant, token_expired)
+    /// </summary>
+    public string? LastOAuthErrorCode { get; set; }
 
     // ========== Campos ApiKey (X/Twitter, Telegram) ==========
     /// <summary>

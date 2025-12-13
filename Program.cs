@@ -40,6 +40,9 @@ try
     builder.Services.AddRazorComponents()
         .AddInteractiveServerComponents();
 
+    // Añadir controladores MVC para endpoints OAuth
+    builder.Services.AddControllers();
+
     // MudBlazor
     builder.Services.AddMudServices();
 
@@ -110,6 +113,10 @@ try
     // Servicios de IA y publicacion inmediata (Sprint 4)
     builder.Services.AddScoped<IAiContentService, AiContentService>();
     builder.Services.AddScoped<IImmediatePublishService, ImmediatePublishService>();
+
+    // Sprint 6: OAuth multi-tenant con PKCE y renovación automática
+    builder.Services.AddScoped<IOAuthStateStore, OAuthStateStore>();
+    builder.Services.AddScoped<ITokenRefreshService, TokenRefreshService>();
 
     // Sprint 5: Configurar clientes Refit para APIs externas
     builder.Services.AddRefitClient<IXApiClient>()
@@ -204,6 +211,9 @@ try
     app.MapRazorComponents<App>()
         .AddInteractiveServerRenderMode();
 
+    // Mapear controladores MVC (para OAuth endpoints)
+    app.MapControllers();
+
     // Add additional endpoints required by the Identity /Account Razor components.
     app.MapAdditionalIdentityEndpoints();
 
@@ -223,8 +233,20 @@ try
         service => service.PublishScheduledPostsAsync(),
         "*/5 * * * *"); // Cada 5 minutos
 
+    // Sprint 6: Jobs de renovación automática de tokens OAuth
+    RecurringJob.AddOrUpdate<TokenRefreshJob>(
+        "refrescar-tokens-oauth",
+        job => job.RefreshExpiringTokensAsync(),
+        "*/15 * * * *"); // Cada 15 minutos
+
+    RecurringJob.AddOrUpdate<TokenRefreshJob>(
+        "limpiar-estados-oauth",
+        job => job.CleanupExpiredStatesAsync(),
+        "0 * * * *"); // Cada hora
+
     Log.Information("SocialPanelCore application started successfully");
     Log.Information("Hangfire Dashboard disponible en: /hangfire");
+    Log.Information("OAuth endpoints disponibles en: /oauth/connect/{provider}");
 
     app.Run();
 }

@@ -334,6 +334,62 @@ namespace SocialPanelCore.Migrations
                     b.ToTable("PostTargetNetworks");
                 });
 
+            modelBuilder.Entity("SocialPanelCore.Domain.Entities.OAuthState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeVerifier")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsConsumed")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("NetworkType")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("RequestedScopes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ReturnUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("State")
+                        .IsUnique();
+
+                    b.ToTable("OAuthStates");
+                });
+
             modelBuilder.Entity("SocialPanelCore.Domain.Entities.SocialChannelConfig", b =>
                 {
                     b.Property<Guid>("Id")
@@ -350,6 +406,9 @@ namespace SocialPanelCore.Migrations
                     b.Property<Guid>("AccountId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AllowMedia")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("ApiKey")
                         .HasColumnType("text");
 
@@ -357,6 +416,9 @@ namespace SocialPanelCore.Migrations
                         .HasColumnType("text");
 
                     b.Property<int>("AuthMethod")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ConnectionStatus")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
@@ -384,11 +446,28 @@ namespace SocialPanelCore.Migrations
                     b.Property<DateTime?>("LastHealthCheck")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("LastOAuthErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("LastRefreshAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastRefreshSuccessAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("NetworkType")
                         .HasColumnType("integer");
 
                     b.Property<string>("RefreshToken")
                         .HasColumnType("text");
+
+                    b.Property<DateTime?>("RefreshTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Scopes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<DateTime?>("TokenExpiresAt")
                         .HasColumnType("timestamp with time zone");
