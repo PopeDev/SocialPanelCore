@@ -102,6 +102,10 @@ try
     builder.Services.AddScoped<IOAuthService, OAuthService>();
     builder.Services.AddScoped<IMediaStorageService, MediaStorageService>();
 
+    // Servicios de IA y publicacion inmediata (Sprint 4)
+    builder.Services.AddScoped<IAiContentService, AiContentService>();
+    builder.Services.AddScoped<IImmediatePublishService, ImmediatePublishService>();
+
     // Configurar Hangfire con PostgreSQL para trabajos en background
     builder.Services.AddHangfire(config =>
     {

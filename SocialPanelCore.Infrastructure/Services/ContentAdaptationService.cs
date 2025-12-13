@@ -7,22 +7,32 @@ using SocialPanelCore.Infrastructure.Data;
 
 namespace SocialPanelCore.Infrastructure.Services;
 
+/// <summary>
+/// Servicio de adaptacion de contenido para Hangfire (trabajos en background).
+/// Procesa posts pendientes y los adapta para cada red social usando el servicio de IA.
+/// </summary>
 public class ContentAdaptationService : IContentAdaptationService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IAiContentService _aiContentService;
     private readonly ILogger<ContentAdaptationService> _logger;
 
     public ContentAdaptationService(
         ApplicationDbContext context,
+        IAiContentService aiContentService,
         ILogger<ContentAdaptationService> logger)
     {
         _context = context;
+        _aiContentService = aiContentService;
         _logger = logger;
     }
 
+    /// <summary>
+    /// Procesa posts pendientes de adaptacion (llamado por Hangfire)
+    /// </summary>
     public async Task AdaptPendingPostsAsync()
     {
-        _logger.LogInformation("Iniciando adaptación de posts pendientes");
+        _logger.LogInformation("Iniciando adaptacion de posts pendientes");
 
         var pendingPosts = await _context.BasePosts
             .Include(p => p.TargetNetworks)
@@ -31,7 +41,7 @@ public class ContentAdaptationService : IContentAdaptationService
             .Take(10)
             .ToListAsync();
 
-        _logger.LogInformation("Encontrados {Count} posts pendientes de adaptación", pendingPosts.Count);
+        _logger.LogInformation("Encontrados {Count} posts pendientes de adaptacion", pendingPosts.Count);
 
         foreach (var post in pendingPosts)
         {
@@ -50,94 +60,45 @@ public class ContentAdaptationService : IContentAdaptationService
     {
         var networksToAdapt = post.TargetNetworks
             .Where(tn => !post.AdaptedVersions.Any(av => av.NetworkType == tn.NetworkType))
-            .Select(tn => tn.NetworkType)
             .ToList();
 
         foreach (var network in networksToAdapt)
         {
-            await AdaptPostForNetworkAsync(post.Id, network);
+            try
+            {
+                // Usar el servicio de IA para crear el AdaptedPost
+                await _aiContentService.CreateAdaptedPostAsync(
+                    post.Id,
+                    network.NetworkType,
+                    network.UseAiOptimization  // Respetar configuracion por red
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adaptando post {PostId} para {Network}",
+                    post.Id, network.NetworkType);
+            }
         }
 
-        // Recargar el post para verificar las versiones adaptadas
-        var updatedPost = await _context.BasePosts
-            .Include(p => p.TargetNetworks)
-            .Include(p => p.AdaptedVersions)
-            .FirstAsync(p => p.Id == post.Id);
+        // Verificar si todas las redes estan adaptadas
+        await _context.Entry(post).ReloadAsync();
+        await _context.Entry(post).Collection(p => p.AdaptedVersions).LoadAsync();
+        await _context.Entry(post).Collection(p => p.TargetNetworks).LoadAsync();
 
-        // Si todas las redes están adaptadas, cambiar estado
-        if (updatedPost.TargetNetworks.All(tn =>
-            updatedPost.AdaptedVersions.Any(av => av.NetworkType == tn.NetworkType)))
+        if (post.TargetNetworks.All(tn =>
+            post.AdaptedVersions.Any(av => av.NetworkType == tn.NetworkType)))
         {
-            updatedPost.State = BasePostState.Adaptada;
+            post.State = BasePostState.Adaptada;
             await _context.SaveChangesAsync();
+            _logger.LogInformation("Post {PostId} completamente adaptado", post.Id);
         }
     }
 
+    /// <summary>
+    /// Adapta un post para una red especifica (metodo legacy para compatibilidad)
+    /// </summary>
     public async Task<AdaptedPost> AdaptPostForNetworkAsync(Guid basePostId, NetworkType network)
     {
-        var basePost = await _context.BasePosts
-            .Include(p => p.Account)
-            .FirstOrDefaultAsync(p => p.Id == basePostId)
-            ?? throw new InvalidOperationException($"Post no encontrado: {basePostId}");
-
-        _logger.LogInformation(
-            "Adaptando post {PostId} para red {Network}",
-            basePostId, network);
-
-        // Adaptar contenido según la red
-        var adaptedContent = await GenerateAdaptedContentAsync(basePost, network);
-
-        var adaptedPost = new AdaptedPost
-        {
-            Id = Guid.NewGuid(),
-            BasePostId = basePostId,
-            NetworkType = network,
-            AdaptedContent = adaptedContent,
-            CharacterCount = adaptedContent.Length,
-            State = AdaptedPostState.Ready,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _context.AdaptedPosts.Add(adaptedPost);
-        await _context.SaveChangesAsync();
-
-        _logger.LogInformation(
-            "Post adaptado: {AdaptedPostId} para red {Network}",
-            adaptedPost.Id, network);
-
-        return adaptedPost;
-    }
-
-    private async Task<string> GenerateAdaptedContentAsync(BasePost post, NetworkType network)
-    {
-        // TODO: Integrar con servicio de IA real
-        // Por ahora, adaptación básica basada en reglas
-
-        var content = post.Content;
-
-        // Adaptación básica (placeholder para IA)
-        var adapted = network switch
-        {
-            NetworkType.X => TruncateWithEllipsis(content, 280),
-            NetworkType.LinkedIn => $"{content}\n\n#profesional #negocios",
-            NetworkType.Instagram => $"{content}\n\n#instagram #socialmedia",
-            NetworkType.TikTok => content.Length > 150
-                ? TruncateWithEllipsis(content, 150)
-                : content,
-            NetworkType.Facebook => content,
-            NetworkType.YouTube => $"{post.Title}\n\n{content}",
-            _ => content
-        };
-
-        // Simular latencia de API de IA
-        await Task.Delay(100);
-
-        return adapted;
-    }
-
-    private static string TruncateWithEllipsis(string text, int maxLength)
-    {
-        if (text.Length <= maxLength) return text;
-        return text.Substring(0, maxLength - 3) + "...";
+        return await _aiContentService.CreateAdaptedPostAsync(basePostId, network, useAi: true);
     }
 }
