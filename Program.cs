@@ -118,6 +118,9 @@ try
     builder.Services.AddScoped<IOAuthStateStore, OAuthStateStore>();
     builder.Services.AddScoped<ITokenRefreshService, TokenRefreshService>();
 
+    // Sprint 7: Sistema de notificaciones in-app
+    builder.Services.AddScoped<INotificationService, NotificationService>();
+
     // Sprint 5: Configurar clientes Refit para APIs externas
     builder.Services.AddRefitClient<IXApiClient>()
         .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.x.com"));
@@ -243,6 +246,17 @@ try
         "limpiar-estados-oauth",
         job => job.CleanupExpiredStatesAsync(),
         "0 * * * *"); // Cada hora
+
+    // Sprint 7: Jobs de health check y notificaciones
+    RecurringJob.AddOrUpdate<ChannelHealthCheckJob>(
+        "verificar-salud-canales",
+        job => job.CheckChannelHealthAsync(),
+        "0 */2 * * *"); // Cada 2 horas
+
+    RecurringJob.AddOrUpdate<ChannelHealthCheckJob>(
+        "limpiar-notificaciones-expiradas",
+        job => job.CleanupExpiredNotificationsAsync(),
+        "0 3 * * *"); // Cada día a las 3:00 AM
 
     Log.Information("SocialPanelCore application started successfully");
     Log.Information("Hangfire Dashboard disponible en: /hangfire");
