@@ -16,6 +16,7 @@ public class TokenRefreshService : ITokenRefreshService
 {
     private readonly ApplicationDbContext _context;
     private readonly IOAuthService _oauthService;
+    private readonly INotificationService _notificationService;
     private readonly IDataProtector _protector;
     private readonly ILogger<TokenRefreshService> _logger;
 
@@ -35,11 +36,13 @@ public class TokenRefreshService : ITokenRefreshService
     public TokenRefreshService(
         ApplicationDbContext context,
         IOAuthService oauthService,
+        INotificationService notificationService,
         IDataProtectionProvider dataProtectionProvider,
         ILogger<TokenRefreshService> logger)
     {
         _context = context;
         _oauthService = oauthService;
+        _notificationService = notificationService;
         _protector = dataProtectionProvider.CreateProtector("SocialChannelTokens");
         _logger = logger;
     }
@@ -272,7 +275,23 @@ public class TokenRefreshService : ITokenRefreshService
             "Canal {ChannelId} ({NetworkType}) marcado como NeedsReauth: {ErrorCode} - {ErrorMessage}",
             channelId, channel.NetworkType, errorCode, errorMessage);
 
-        // TODO: Notificar al usuario (email, notificación in-app, etc.)
+        // Crear notificación in-app para los usuarios de la cuenta
+        try
+        {
+            await _notificationService.CreateOAuthReauthNotificationAsync(
+                channel.AccountId,
+                channel.NetworkType,
+                channelId,
+                errorCode);
+
+            _logger.LogInformation(
+                "Notificación de reconexión creada para canal {ChannelId}",
+                channelId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al crear notificación de reconexión para canal {ChannelId}", channelId);
+        }
     }
 
     private static bool IsReauthRequiredError(string? errorCode)

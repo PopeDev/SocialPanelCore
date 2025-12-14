@@ -20,6 +20,7 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
     public DbSet<PostMedia> PostMedia => Set<PostMedia>();
     public DbSet<UserAccountAccess> UserAccountAccess => Set<UserAccountAccess>();
     public DbSet<OAuthState> OAuthStates => Set<OAuthState>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -166,6 +167,50 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
             entity.HasIndex(e => e.State).IsUnique();
 
             // Índice para limpieza de estados expirados
+            entity.HasIndex(e => e.ExpiresAt);
+        });
+
+        // ========== CONFIGURACIÓN DE Notification ==========
+        builder.Entity<Notification>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Title)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(e => e.Message)
+                .IsRequired()
+                .HasMaxLength(2000);
+
+            entity.Property(e => e.ActionUrl)
+                .HasMaxLength(500);
+
+            entity.Property(e => e.ActionText)
+                .HasMaxLength(100);
+
+            // Relación con User (opcional)
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Relación con Account
+            entity.HasOne(e => e.Account)
+                .WithMany()
+                .HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Relación con SocialChannelConfig (opcional)
+            entity.HasOne(e => e.RelatedChannel)
+                .WithMany()
+                .HasForeignKey(e => e.RelatedChannelId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Índices para consultas frecuentes
+            entity.HasIndex(e => new { e.UserId, e.IsRead, e.IsDismissed });
+            entity.HasIndex(e => new { e.AccountId, e.IsRead, e.IsDismissed });
+            entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => e.ExpiresAt);
         });
     }
