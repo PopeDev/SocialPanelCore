@@ -199,11 +199,12 @@ public class OAuthController : ControllerBase
                     tokenResult.AccessToken!,
                     tokenResult.RefreshToken,
                     tokenResult.ExpiresAt,
-                    userInfo?.Username ?? userInfo?.DisplayName);
+                    userInfo?.Username ?? userInfo?.DisplayName,
+                    userInfo?.Id); // ← Guardar external user ID para Facebook data deletion
 
                 _logger.LogInformation(
-                    "Nueva conexión {Provider} creada para cuenta {AccountId}",
-                    provider, oauthState.AccountId);
+                    "Nueva conexión {Provider} creada para cuenta {AccountId}, external user ID {ExternalUserId}",
+                    provider, oauthState.AccountId, userInfo?.Id);
             }
 
             // Redirigir con éxito

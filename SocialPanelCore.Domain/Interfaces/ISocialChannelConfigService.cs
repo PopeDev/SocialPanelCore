@@ -16,7 +16,8 @@ public interface ISocialChannelConfigService
         string accessToken,
         string? refreshToken,
         DateTime? tokenExpiresAt,
-        string? handle);
+        string? handle,
+        string? externalUserId = null);
 
     // ========== Creación con ApiKey (X/Twitter, Telegram) ==========
     Task<SocialChannelConfig> CreateChannelConfigWithApiKeyAsync(
@@ -44,6 +45,15 @@ public interface ISocialChannelConfigService
 
     // ========== Verificación de conexión ==========
     Task<bool> TestConnectionAsync(Guid id);
+
+    // ========== Eliminación de datos ==========
+    /// <summary>
+    /// Elimina configuraciones de canales por user ID externo (para data deletion de Facebook).
+    /// </summary>
+    /// <param name="externalUserId">User ID de Facebook/Instagram</param>
+    /// <param name="networkTypes">Tipos de redes a eliminar (ej. Facebook, Instagram)</param>
+    /// <returns>Número de configuraciones eliminadas</returns>
+    Task<int> DeleteByExternalUserIdAsync(string externalUserId, NetworkType[] networkTypes);
 
     // ========== Configuración de medios ==========
     /// <summary>

@@ -196,7 +196,7 @@
             var baseUrl = NavigationManager.BaseUri.TrimEnd('/');
             var redirectUri = $"{baseUrl}/oauth/callback";
 
-            var authUrl = OAuthService.GetAuthorizationUrl(NetworkType, AccountId, redirectUri);
+            var authUrl = OAuthService.GetAuthorizationUrl(NetworkType, AccountId.ToString(), redirectUri);
 
             // Abrir ventana de autorizacion
             await JS.InvokeVoidAsync("open", authUrl, "_blank", "width=600,height=700");

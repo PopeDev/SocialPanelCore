@@ -63,7 +63,8 @@ public class SocialChannelConfigService : ISocialChannelConfigService
         string accessToken,
         string? refreshToken,
         DateTime? tokenExpiresAt,
-        string? handle)
+        string? handle,
+        string? externalUserId = null)
     {
         // Verificar que la cuenta existe
         var accountExists = await _context.Accounts.AnyAsync(a => a.Id == accountId);
@@ -88,6 +89,7 @@ public class SocialChannelConfigService : ISocialChannelConfigService
             RefreshToken = refreshToken != null ? _protector.Protect(refreshToken) : null,
             TokenExpiresAt = tokenExpiresAt,
             Handle = handle,
+            ExternalUserId = externalUserId,
             IsEnabled = true,
             HealthStatus = HealthStatus.OK,
             CreatedAt = DateTime.UtcNow,
@@ -310,6 +312,34 @@ public class SocialChannelConfigService : ISocialChannelConfigService
     public string GetDecryptedAccessToken(SocialChannelConfig config)
     {
         return _protector.Unprotect(config.AccessToken);
+    }
+
+    // ========== Eliminación de datos ==========
+    public async Task<int> DeleteByExternalUserIdAsync(string externalUserId, NetworkType[] networkTypes)
+    {
+        _logger.LogInformation(
+            "Buscando configuraciones para external user ID {UserId} en redes {Networks}",
+            externalUserId, string.Join(", ", networkTypes));
+
+        // Buscar todos los canales con ese ExternalUserId
+        var channelsToDelete = await _context.SocialChannelConfigs
+            .Where(c => networkTypes.Contains(c.NetworkType) && c.ExternalUserId == externalUserId)
+            .ToListAsync();
+
+        if (channelsToDelete.Count == 0)
+        {
+            _logger.LogWarning("No se encontraron configuraciones para eliminar con user ID {UserId}", externalUserId);
+            return 0;
+        }
+
+        _context.SocialChannelConfigs.RemoveRange(channelsToDelete);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Eliminadas {Count} configuraciones para user ID {UserId}",
+            channelsToDelete.Count, externalUserId);
+
+        return channelsToDelete.Count;
     }
 
     // ========== Configuración de medios ==========

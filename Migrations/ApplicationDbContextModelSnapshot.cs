@@ -195,7 +195,7 @@ namespace SocialPanelCore.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Accounts");
+                    b.ToTable("Accounts", (string)null);
                 });
 
             modelBuilder.Entity("SocialPanelCore.Domain.Entities.AdaptedPost", b =>
@@ -242,7 +242,7 @@ namespace SocialPanelCore.Migrations
                     b.HasIndex("BasePostId", "NetworkType")
                         .IsUnique();
 
-                    b.ToTable("AdaptedPosts");
+                    b.ToTable("AdaptedPosts", (string)null);
                 });
 
             modelBuilder.Entity("SocialPanelCore.Domain.Entities.BasePost", b =>
@@ -253,6 +253,9 @@ namespace SocialPanelCore.Migrations
 
                     b.Property<Guid>("AccountId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("AiOptimizationEnabled")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("ApprovalNotes")
                         .HasMaxLength(1000)
@@ -276,6 +279,9 @@ namespace SocialPanelCore.Migrations
 
                     b.Property<Guid?>("CreatedByUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("PublishMode")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("PublishedAt")
                         .HasColumnType("timestamp with time zone");
@@ -312,26 +318,76 @@ namespace SocialPanelCore.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.ToTable("BasePosts");
+                    b.ToTable("BasePosts", (string)null);
                 });
 
-            modelBuilder.Entity("SocialPanelCore.Domain.Entities.PostTargetNetwork", b =>
+            modelBuilder.Entity("SocialPanelCore.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("BasePostId")
+                    b.Property<Guid>("AccountId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("NetworkType")
+                    b.Property<string>("ActionText")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ActionUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDismissed")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RelatedChannelId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("RelatedNetwork")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BasePostId");
+                    b.HasIndex("CreatedAt");
 
-                    b.ToTable("PostTargetNetworks");
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("RelatedChannelId");
+
+                    b.HasIndex("AccountId", "IsRead", "IsDismissed");
+
+                    b.HasIndex("UserId", "IsRead", "IsDismissed");
+
+                    b.ToTable("Notifications", (string)null);
                 });
 
             modelBuilder.Entity("SocialPanelCore.Domain.Entities.OAuthState", b =>
@@ -387,7 +443,77 @@ namespace SocialPanelCore.Migrations
                     b.HasIndex("State")
                         .IsUnique();
 
-                    b.ToTable("OAuthStates");
+                    b.ToTable("OAuthStates", (string)null);
+                });
+
+            modelBuilder.Entity("SocialPanelCore.Domain.Entities.PostMedia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BasePostId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("FileSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("StoredFileName")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BasePostId");
+
+                    b.ToTable("PostMedia", (string)null);
+                });
+
+            modelBuilder.Entity("SocialPanelCore.Domain.Entities.PostTargetNetwork", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BasePostId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IncludeMedia")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("NetworkType")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("UseAiOptimization")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BasePostId");
+
+                    b.ToTable("PostTargetNetworks", (string)null);
                 });
 
             modelBuilder.Entity("SocialPanelCore.Domain.Entities.SocialChannelConfig", b =>
@@ -447,8 +573,7 @@ namespace SocialPanelCore.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("LastOAuthErrorCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("LastRefreshAttemptAt")
                         .HasColumnType("timestamp with time zone");
@@ -466,8 +591,7 @@ namespace SocialPanelCore.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Scopes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("TokenExpiresAt")
                         .HasColumnType("timestamp with time zone");
@@ -480,7 +604,7 @@ namespace SocialPanelCore.Migrations
                     b.HasIndex("AccountId", "NetworkType")
                         .IsUnique();
 
-                    b.ToTable("SocialChannelConfigs");
+                    b.ToTable("SocialChannelConfigs", (string)null);
                 });
 
             modelBuilder.Entity("SocialPanelCore.Domain.Entities.User", b =>
@@ -591,7 +715,7 @@ namespace SocialPanelCore.Migrations
                     b.HasIndex("UserId", "AccountId")
                         .IsUnique();
 
-                    b.ToTable("UserAccountAccess");
+                    b.ToTable("UserAccountAccess", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
@@ -658,7 +782,7 @@ namespace SocialPanelCore.Migrations
 
                             b1.HasKey("IdentityUserPasskeyCredentialId");
 
-                            b1.ToTable("AspNetUserPasskeys");
+                            b1.ToTable("AspNetUserPasskeys", (string)null);
 
                             b1.ToJson("Data");
 
@@ -723,6 +847,42 @@ namespace SocialPanelCore.Migrations
                     b.Navigation("CreatedByUser");
                 });
 
+            modelBuilder.Entity("SocialPanelCore.Domain.Entities.Notification", b =>
+                {
+                    b.HasOne("SocialPanelCore.Domain.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("SocialPanelCore.Domain.Entities.SocialChannelConfig", "RelatedChannel")
+                        .WithMany()
+                        .HasForeignKey("RelatedChannelId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("SocialPanelCore.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Account");
+
+                    b.Navigation("RelatedChannel");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SocialPanelCore.Domain.Entities.PostMedia", b =>
+                {
+                    b.HasOne("SocialPanelCore.Domain.Entities.BasePost", "BasePost")
+                        .WithMany("Media")
+                        .HasForeignKey("BasePostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("BasePost");
+                });
+
             modelBuilder.Entity("SocialPanelCore.Domain.Entities.PostTargetNetwork", b =>
                 {
                     b.HasOne("SocialPanelCore.Domain.Entities.BasePost", "BasePost")
@@ -776,6 +936,8 @@ namespace SocialPanelCore.Migrations
             modelBuilder.Entity("SocialPanelCore.Domain.Entities.BasePost", b =>
                 {
                     b.Navigation("AdaptedVersions");
+
+                    b.Navigation("Media");
 
                     b.Navigation("TargetNetworks");
                 });
