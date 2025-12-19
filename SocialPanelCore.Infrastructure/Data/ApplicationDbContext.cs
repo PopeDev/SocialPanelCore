@@ -21,6 +21,9 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
     public DbSet<UserAccountAccess> UserAccountAccess => Set<UserAccountAccess>();
     public DbSet<OAuthState> OAuthStates => Set<OAuthState>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<Project> Projects => Set<Project>();
+    public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<Reminder> Reminders => Set<Reminder>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -212,6 +215,107 @@ public class ApplicationDbContext : IdentityDbContext<User, IdentityRole<Guid>, 
             entity.HasIndex(e => new { e.AccountId, e.IsRead, e.IsDismissed });
             entity.HasIndex(e => e.CreatedAt);
             entity.HasIndex(e => e.ExpiresAt);
+        });
+
+        // ========== CONFIGURACIÓN DE Project ==========
+        builder.Entity<Project>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(e => e.Description)
+                .HasMaxLength(2000);
+
+            entity.Property(e => e.Budget)
+                .HasPrecision(18, 2);
+
+            // Relación con Account
+            entity.HasOne(e => e.Account)
+                .WithMany()
+                .HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Índices
+            entity.HasIndex(e => e.AccountId);
+            entity.HasIndex(e => e.IsActive);
+        });
+
+        // ========== CONFIGURACIÓN DE Expense ==========
+        builder.Entity<Expense>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Description)
+                .IsRequired()
+                .HasMaxLength(500);
+
+            entity.Property(e => e.Amount)
+                .IsRequired()
+                .HasPrecision(18, 2);
+
+            entity.Property(e => e.Category)
+                .HasMaxLength(100);
+
+            entity.Property(e => e.Notes)
+                .HasMaxLength(2000);
+
+            // Relación con Account
+            entity.HasOne(e => e.Account)
+                .WithMany()
+                .HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Relación con Project (opcional)
+            entity.HasOne(e => e.Project)
+                .WithMany(p => p.Expenses)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Índices
+            entity.HasIndex(e => e.AccountId);
+            entity.HasIndex(e => e.ProjectId);
+            entity.HasIndex(e => e.ExpenseDate);
+        });
+
+        // ========== CONFIGURACIÓN DE Reminder ==========
+        builder.Entity<Reminder>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Title)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(e => e.Description)
+                .HasMaxLength(2000);
+
+            // Relación con Account
+            entity.HasOne(e => e.Account)
+                .WithMany()
+                .HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Relación con User (opcional)
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Relación con Project (opcional)
+            entity.HasOne(e => e.Project)
+                .WithMany(p => p.Reminders)
+                .HasForeignKey(e => e.ProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Índices
+            entity.HasIndex(e => e.AccountId);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.ProjectId);
+            entity.HasIndex(e => e.DueDate);
+            entity.HasIndex(e => e.IsCompleted);
         });
     }
 }
