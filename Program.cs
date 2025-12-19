@@ -121,6 +121,11 @@ try
     // Sprint 7: Sistema de notificaciones in-app
     builder.Services.AddScoped<INotificationService, NotificationService>();
 
+    // Servicios de proyectos, gastos y recordatorios
+    builder.Services.AddScoped<IProjectService, ProjectService>();
+    builder.Services.AddScoped<IExpenseService, ExpenseService>();
+    builder.Services.AddScoped<IReminderService, ReminderService>();
+
     // Sprint 5: Configurar clientes Refit para APIs externas
     builder.Services.AddRefitClient<IXApiClient>()
         .ConfigureHttpClient(c => c.BaseAddress = new Uri("https://api.x.com"));
